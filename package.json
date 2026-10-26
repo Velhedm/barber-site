@@ -2,9 +2,9 @@
   "name": "ruslan-true-barber",
   "version": "2.0.0",
   "private": true,
-  "description": "Responsive barber landing page \u2014 HTML, CSS, JavaScript",
+  "description": "Interactive five-slide presentation of the Ruslan True service model",
   "scripts": {
     "start": "python3 -m http.server 3000 --directory dist",
-    "check": "node --check dist/assets/js/settings.js && node --check dist/assets/js/main.js && node --check dist/assets/js/motion.js && node --check dist/assets/js/calendar.js"
+    "check": "node --check dist/app.js"
   }
 }

@@ -34,7 +34,7 @@
   const image = document.querySelector('#device-preview');
   function setDevice(mobile) {
     image.src = mobile ? 'assets/mobile.png' : 'assets/desktop.png';
-    image.alt = `${mobile ? 'Мобильная' : 'Десктопная'} версия действующего сайта Ruslan True`;
+    image.alt = `${mobile ? 'Мобильный' : 'Десктопный'} макет интерфейса Ruslan True`;
     image.classList.toggle('mobile-view', mobile);
     document.querySelector('#desktop-toggle').setAttribute('aria-pressed', String(!mobile));
     document.querySelector('#mobile-toggle').setAttribute('aria-pressed', String(mobile));
