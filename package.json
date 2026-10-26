@@ -5,6 +5,6 @@
   "description": "Responsive barber landing page \u2014 HTML, CSS, JavaScript",
   "scripts": {
     "start": "python3 -m http.server 3000 --directory dist",
-    "check": "node --check dist/assets/js/settings.js && node --check dist/assets/js/main.js && node --check dist/assets/js/motion.js"
+    "check": "node --check dist/assets/js/settings.js && node --check dist/assets/js/main.js && node --check dist/assets/js/motion.js && node --check dist/assets/js/calendar.js"
   }
 }
