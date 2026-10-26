@@ -1,0 +1,10 @@
+{
+  "name": "ruslan-true-barber",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Responsive barber landing page \u2014 HTML, CSS, JavaScript",
+  "scripts": {
+    "start": "python3 -m http.server 3000 --directory dist",
+    "check": "node --check dist/assets/js/config.js && node --check dist/assets/js/main.js && node --check dist/assets/js/motion.js"
+  }
+}

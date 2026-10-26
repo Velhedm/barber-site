@@ -1,0 +1,48 @@
+/* A single clean cut introduces the page; interaction follows the hand. */
+.scroll-thread{position:fixed;inset:0 0 auto;height:3px;z-index:40;pointer-events:none;transform:scaleX(0);transform-origin:left;background:repeating-linear-gradient(125deg,#d2c2a3 0 12px,#f1f0e9 12px 22px,#494b40 22px 32px)}
+.hero h1{position:relative;width:fit-content;max-width:100%}
+.cut-sweep{position:absolute;left:0;right:0;bottom:9%;height:1px;pointer-events:none;color:var(--accent);opacity:0;z-index:3}
+.cut-sweep:before{content:'';position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,currentColor);transform-origin:left;transform:scaleX(0)}
+.cut-sweep svg{position:absolute;left:0;top:-15px;width:32px;height:32px;overflow:visible}
+.motion-ready .hero h1>[data-t]{display:inline-block;animation:clean-cut 1.05s cubic-bezier(.22,1,.36,1) both}
+.motion-ready .hero h1>[data-t]:nth-of-type(2){animation-delay:.14s}
+.motion-ready .cut-sweep{animation:cut-pass 1.3s .1s both}
+.motion-ready .cut-sweep:before{animation:cut-line 1.05s .1s cubic-bezier(.22,1,.36,1) both}
+.motion-ready .cut-sweep svg{animation:scissor-pass 1.05s .1s cubic-bezier(.22,1,.36,1) both}
+.motion-ready .hero .hero-description,.motion-ready .hero .hero-actions{animation:soft-arrival .8s .4s both}
+@keyframes clean-cut{from{clip-path:inset(0 100% 0 0);transform:translateX(-10px)}to{clip-path:inset(0 0 0 0);transform:translateX(0)}}
+@keyframes cut-pass{0%,100%{opacity:0}12%,72%{opacity:.8}}
+@keyframes cut-line{0%{transform:scaleX(0)}75%{transform:scaleX(1)}100%{transform:scaleX(1);opacity:0}}
+@keyframes scissor-pass{from{left:0;transform:rotate(-15deg)}to{left:calc(100% - 32px);transform:rotate(12deg)}}
+@keyframes soft-arrival{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.gallery-card{--tilt-x:0deg;--tilt-y:0deg;--spot-x:50%;--spot-y:50%;isolation:isolate}
+.card-light{position:absolute;inset:0;z-index:2;opacity:0;pointer-events:none;background:radial-gradient(circle 200px at var(--spot-x) var(--spot-y),#e9d7b92b,transparent 75%);transition:opacity .35s}
+.gallery-card .image-top,.gallery-card .image-bottom{z-index:3}
+.gallery-card::before{content:'';position:absolute;top:-40%;bottom:-40%;left:-75%;width:40%;z-index:2;pointer-events:none;background:linear-gradient(90deg,transparent,#f2e9d81f,transparent);transform:skewX(-20deg);opacity:0}
+.motion-ready .gallery-card.revealed::before{animation:light-pass 1s .15s both}
+.motion-ready .gallery-card:nth-child(2).revealed::before{animation-delay:.3s}
+.motion-ready .gallery-card:nth-child(3).revealed::before{animation-delay:.45s}
+@keyframes light-pass{0%{left:-75%;opacity:0}25%{opacity:1}100%{left:140%;opacity:0}}
+@media(hover:hover) and (pointer:fine){
+ .motion-ready .gallery-card:hover{transform:perspective(950px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) translateY(-5px);transition:transform .18s ease-out,box-shadow .4s;box-shadow:0 24px 55px #0007}
+ .motion-ready .gallery-card:hover .card-light{opacity:1}
+ .motion-ready .hero .button,.motion-ready .contact .button{translate:var(--magnet-x,0px) var(--magnet-y,0px);transition:translate .2s ease-out,background .2s,transform .2s}
+}
+.service-list{isolation:isolate}
+.service-row{position:relative;overflow:hidden}
+.service-row:after{content:'';position:absolute;left:20px;right:20px;bottom:0;height:1px;background:linear-gradient(90deg,var(--accent),transparent);transform:scaleX(0);transform-origin:left;transition:transform .55s cubic-bezier(.22,1,.36,1);pointer-events:none}
+.service-row:hover:after,.service-row:focus-visible:after{transform:scaleX(1)}
+.motion-ready .service-list.motion-entered .service-row{animation:soft-arrival .65s both;animation-delay:calc(var(--service-index,0)*75ms)}
+.service-row:nth-child(1){--service-index:0}.service-row:nth-child(2){--service-index:1}.service-row:nth-child(3){--service-index:2}.service-row:nth-child(4){--service-index:3}.service-row:nth-child(5){--service-index:4}.service-row:nth-child(6){--service-index:5}
+.signature{position:relative;padding-bottom:14px}
+.signature-stroke{position:absolute;left:-6px;bottom:0;width:115%;height:22px;overflow:visible;pointer-events:none}
+.signature-stroke path{stroke:var(--accent);stroke-width:1;fill:none;stroke-dasharray:1;stroke-dashoffset:0;opacity:.7}
+.motion-ready .signature-stroke path{stroke-dashoffset:1}
+.motion-ready .signature.motion-entered .signature-stroke path{animation:signature-draw 1.15s .25s ease-out forwards}
+@keyframes signature-draw{to{stroke-dashoffset:0}}
+@media(max-width:760px){.cut-sweep svg{width:24px;height:24px;top:-11px}.scroll-thread{height:2px}}
+@media(prefers-reduced-motion:reduce){
+ .scroll-thread,.cut-sweep,.card-light,.gallery-card::before{display:none!important}
+ .motion-ready .hero h1>[data-t],.motion-ready .hero .hero-description,.motion-ready .hero .hero-actions,.motion-ready .service-list .service-row,.signature-stroke path{animation:none!important;clip-path:none!important;opacity:1;transform:none;stroke-dashoffset:0}
+ .gallery-card:hover{transform:none!important}.service-row:after{transition:none}.button{translate:none!important}
+}
