@@ -1,15 +1,9 @@
-# Публикация на Render
+# Запуск серверной версии
 
-Проект готов к статическому хостингу.
+Эта ветка содержит Node.js 24 / Express / SQLite, а не статический сайт.
 
-- Репозиторий: https://github.com/Velhedm/barber-site
-- Ветка: main
-- Тип: Static Site
-- Имя: ruslantrue (если занято, ruslantrue-barber)
-- Build Command: npm run check
-- Publish Directory: dist
+Полная инструкция, переменные окружения, Telegram и настройка постоянного диска: [README.md](README.md).
 
-Можно подключить репозиторий как Blueprint: настройки уже указаны в render.yaml.
-Публикация через Blueprint: https://dashboard.render.com/select-repo?type=blueprint
+Локально: npm ci, создать .env по образцу, npm run admin:hash, npm start.
 
-Либо New → Static Site → выбрать репозиторий → указать параметры выше. Адрес выдаст Render после успешного запуска. Желаемое имя не гарантируется до создания сайта.
+Публикацию из этой ветки на текущий Static Site включать нельзя: он не обслуживает API. Нужен Web Service и постоянное хранилище. Платные ресурсы не созданы.
