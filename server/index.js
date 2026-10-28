@@ -1,5 +1,6 @@
 'use strict';
 const {createApp}=require('./app');
+const {startupError}=require('./startup-error');
 if(process.env.NODE_ENV==='production'&&!process.env.DATABASE_URL&&!process.env.DB_PATH?.startsWith('/data/'))throw new Error('Production requires DB_PATH on the persistent /data disk');
 async function main(){
 const runtime=await createApp();const server=runtime.app.listen(Number(process.env.PORT)||3000,'0.0.0.0',()=>console.log('Ruslan True server started'));
@@ -8,4 +9,4 @@ function stop(){clearInterval(timer);server.close(()=>{runtime.close().then(()=>
 process.on('SIGTERM',stop);process.on('SIGINT',stop);
 
 }
-main().catch(()=>{console.error('Server startup failed. Check database and environment settings.');process.exit(1);});
+main().catch(error=>{console.error(startupError(error));process.exit(1);});
