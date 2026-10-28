@@ -1,20 +1,22 @@
 {
   "name": "ruslan-true-barber",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
-  "description": "Interactive five-slide presentation of the Ruslan True service model",
+  "description": "Booking application with owner PWA and Web Push",
   "scripts": {
     "start": "node --env-file-if-exists=.env server/index.js",
-    "check": "node --check server/index.js && node --check server/app.js && node --check dist/app.js && node --check dist/admin.js",
+    "check": "node --check server/index.js && node --check server/app.js && node --check dist/app.js && node --check dist/admin.js && node --check dist/sw.js",
     "test": "node --test test/*.test.js",
-    "admin:hash": "node scripts/admin-hash.js"
+    "admin:hash": "node scripts/admin-hash.js",
+    "push:keys": "node scripts/push-keys.js"
   },
   "engines": {
     "node": ">=24 <25"
   },
   "dependencies": {
     "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
     "helmet": "^8.1.0",
-    "express-rate-limit": "^8.1.0"
+    "web-push": "^3.6.7"
   }
 }

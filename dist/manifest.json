@@ -1,0 +1,36 @@
+{
+  "id": "/owner",
+  "name": "Ruslan True — панель владельца",
+  "short_name": "Ruslan True",
+  "lang": "ru",
+  "start_url": "/admin.html?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "fullscreen"
+  ],
+  "background_color": "#10120f",
+  "theme_color": "#10120f",
+  "description": "Записи клиентов, расписание и уведомления владельца",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

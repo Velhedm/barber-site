@@ -2,7 +2,7 @@
 
 Эта ветка содержит Node.js 24 / Express / SQLite, а не статический сайт.
 
-Полная инструкция, переменные окружения, Telegram и настройка постоянного диска: [README.md](README.md).
+Полная инструкция, переменные окружения, VAPID/Web Push и настройка постоянного диска: [README.md](README.md).
 
 Локально: npm ci, создать .env по образцу, npm run admin:hash, npm start.
 
