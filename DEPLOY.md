@@ -1,9 +1,9 @@
 # Запуск серверной версии
 
-Эта ветка содержит Node.js 24 / Express / SQLite, а не статический сайт.
+Node.js 24 / Express, Neon PostgreSQL или SQLite. Бесплатная схема: один Render Web Service Free + Neon Free, без постоянного диска Render.
 
-Полная инструкция, переменные окружения, VAPID/Web Push и настройка постоянного диска: [README.md](README.md).
+Ветка `backend-booking`, build `npm ci && npm run check`, start `npm start`. Текущий Static Site на `main` остается презентацией.
 
-Локально: npm ci, создать .env по образцу, npm run admin:hash, npm start.
+Переменные в Render Environment: `DATABASE_URL`, `ADMIN_PASSWORD` (12+ символов), `NODE_ENV=production`, `TRUST_PROXY=1`, постоянные VAPID-ключи и `VAPID_SUBJECT`. Адрес автоматически берется из `RENDER_EXTERNAL_URL`.
 
-Публикацию из этой ветки на текущий Static Site включать нельзя: он не обслуживает API. Нужен Web Service и постоянное хранилище. Платные ресурсы не созданы.
+Полная инструкция и ограничения: [README.md](README.md#бесплатный-запуск-render--neon).
