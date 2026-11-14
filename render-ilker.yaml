@@ -1,0 +1,47 @@
+# Uses the existing database and owner credentials; no secret values are stored here.
+services:
+  - type: web
+    name: ilker-sevim-barbers
+    runtime: node
+    plan: free
+    region: ohio
+    repo: https://github.com/Velhedm/barber-site
+    branch: backend-booking
+    buildCommand: npm ci && npm run check
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DATABASE_URL
+        fromService:
+          name: ruslantrue-app
+          type: web
+          envVarKey: DATABASE_URL
+      - key: ADMIN_PASSWORD
+        fromService:
+          name: ruslantrue-app
+          type: web
+          envVarKey: ADMIN_PASSWORD
+      - key: ADMIN_PASSWORD_HASH
+        fromService:
+          name: ruslantrue-app
+          type: web
+          envVarKey: ADMIN_PASSWORD_HASH
+      - key: VAPID_PUBLIC_KEY
+        fromService:
+          name: ruslantrue-app
+          type: web
+          envVarKey: VAPID_PUBLIC_KEY
+      - key: VAPID_PRIVATE_KEY
+        fromService:
+          name: ruslantrue-app
+          type: web
+          envVarKey: VAPID_PRIVATE_KEY
+      - key: VAPID_SUBJECT
+        fromService:
+          name: ruslantrue-app
+          type: web
+          envVarKey: VAPID_SUBJECT
