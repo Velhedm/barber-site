@@ -1,5 +1,8 @@
 'use strict';
 (() => {
+  if(new URLSearchParams(location.search).get('owner')==='1'){
+    const back=document.createElement('a');back.className='owner-return';back.href='/admin.html';back.textContent='← Вернуться в панель владельца';document.body.prepend(back);
+  }
   const $ = selector => document.querySelector(selector);
   const {t}=window.RTI18n;
   function setMessage(element,key){element.dataset.messageKey=key;element.textContent=t(key);}

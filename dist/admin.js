@@ -5,6 +5,7 @@
  const highlight=new URL(location.href).searchParams.get('booking');
  const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
  const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+ if(ios&&standalone()){const hint=document.createElement('p');hint.className='client-link-hint';hint.textContent='Если сайт откроется здесь, нажмите «Вернуться в панель» вверху страницы.';document.querySelector('.header-tools').append(hint);}
  const pushSupported=()=>window.isSecureContext&&'serviceWorker'in navigator&&'PushManager'in window&&'Notification'in window;
  const day=()=>new Date(Date.now()+4*3600000).toISOString().slice(0,10);
  function clearPrivate(){current=null;availability=null;bookingsSignature='';scheduleSignature='';document.querySelector('#booking-search').value='';document.querySelector('#all-bookings').replaceChildren();document.querySelector('#appointments').replaceChildren();document.querySelector('#admin-hours').replaceChildren();document.querySelector('#booking-count').textContent='';}
@@ -27,7 +28,7 @@
   const service=document.createElement('p');const area=row.room==='vip'?'VIP OTAQ':'ZAL';
   const listed=row.price_min===row.price_max?formatMinor(row.price_min):`${formatMinor(row.price_min)} – ${formatMinor(row.price_max)}`;
   const cost=row.actual_price===null?`${listed} · итоговая цена не указана`:formatMinor(row.actual_price);
-  service.textContent=`${row.service_name} · ${area} · ${row.duration_minutes} мин · ${cost}`;box.append(service);
+  service.className='appointment-service';const serviceName=document.createElement('span');serviceName.className='appointment-service-name';serviceName.textContent=row.service_name;const serviceDetails=document.createElement('span');serviceDetails.className='appointment-service-details';serviceDetails.textContent=`${area} · ${row.duration_minutes} мин · ${cost}`;service.append(serviceName,serviceDetails);box.append(service);
   const actions=document.createElement('div');actions.className='action-row';
   function addAction(label,handler,danger=false){const button=document.createElement('button');button.type='button';button.className='text-button'+(danger?' danger':'');button.textContent=label;button.addEventListener('click',async()=>{button.disabled=true;try{await handler();}finally{button.disabled=false;}});actions.append(button);}
   if(row.status==='active'){
