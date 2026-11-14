@@ -72,7 +72,8 @@ async function createApp(options={}){
   res.json({brand:catalog.brand,serverTime:now(),timezone:'Asia/Baku',hours,services,notificationsEnabled:pushEnabled,maxDaysAhead:horizon});
  });
  app.get('/api/availability',async(req,res)=>{
-  const data=await shop.availability(req.query.date,req.query.serviceId,req.query.room);res.json(data);
+  const ids=typeof req.query.serviceIds==='string'?req.query.serviceIds.split(','):undefined;
+  const data=await shop.availability(req.query.date,req.query.serviceId,req.query.room,ids);res.json(data);
  });
  app.post('/api/bookings',limiter(options.bookingLimit||12,10*60000),async(req,res)=>{
   const booking=await shop.book(req.body);res.status(201).json({id:booking.id,date:booking.date,time:booking.time,serviceId:booking.service_id,room:booking.room,durationMinutes:booking.duration_minutes,status:'confirmed'});
@@ -92,7 +93,9 @@ async function createApp(options={}){
  app.post('/api/admin/logout',auth,async(req,res)=>{if(typeof req.body.endpoint==='string')(await db.prepare('DELETE FROM push_subscriptions WHERE endpoint=?').run(req.body.endpoint));(await db.prepare('DELETE FROM sessions WHERE token_hash=?').run(req.session.token_hash));res.clearCookie('rt_session',{path:'/api/admin',httpOnly:true,sameSite:'strict',secure:production}).json({ok:true});});
  app.get('/api/admin/day',auth,async(req,res)=>{
   if(!validDate(req.query.date))return res.status(400).json({error:'Некорректная дата'});
-  res.json({date:req.query.date,closed:Boolean((await db.prepare('SELECT 1 FROM closed_days WHERE date=?').get(req.query.date))),notificationsEnabled:pushEnabled,slots:(await db.prepare("SELECT * FROM slots WHERE date=? AND status='active' ORDER BY time").all(req.query.date)).map(({request_key,...safe})=>safe)});
+  const rows=await db.prepare("SELECT * FROM slots WHERE date=? AND status='active' ORDER BY time").all(req.query.date);
+  const itemMap=await shop.itemsFor(rows.filter(row=>row.kind==='booking').map(row=>row.id));const slots=rows.map(({request_key,...safe})=>({...safe,items:itemMap.get(safe.id)||[]}));
+  res.json({date:req.query.date,closed:Boolean((await db.prepare('SELECT 1 FROM closed_days WHERE date=?').get(req.query.date))),notificationsEnabled:pushEnabled,slots});
  });
  app.post('/api/admin/slot',auth,async(req,res)=>res.json(await shop.setSlot(req.body.date,req.body.time,req.body.blocked)));
  app.post('/api/admin/day',auth,async(req,res)=>res.json(await shop.setDay(req.body.date,req.body.closed)));
@@ -136,11 +139,11 @@ async function createApp(options={}){
   const args=[status,status,q,q,q,digits,`%${digits}%`];
   const rows=(await db.prepare(`SELECT id,date,time,status,name,phone,service_id,service_name,room,price_min,price_max,actual_price,duration_minutes,sessions_count,created_at FROM slots WHERE ${condition} ORDER BY created_at DESC,id DESC LIMIT 50 OFFSET ?`).all(...args,offset));
   const count=(await db.prepare(`SELECT count(*) AS n FROM slots WHERE ${condition}`).get(...args)).n;
-  res.json({rows,count,offset});
+  const itemMap=await shop.itemsFor(rows.map(row=>row.id));res.json({rows:rows.map(row=>({...row,items:itemMap.get(row.id)||[]})),count,offset});
  });
  app.get('/api/admin/booking/:id',auth,async(req,res)=>{
   const row=(await db.prepare("SELECT id,date,time,status,name,phone,service_id,service_name,room,price_min,price_max,actual_price,duration_minutes,sessions_count,created_at FROM slots WHERE id=? AND kind='booking'").get(req.params.id));
-  if(!row)return res.status(404).json({error:'Запись не найдена'});res.json(row);
+  if(!row)return res.status(404).json({error:'Запись не найдена'});res.json({...row,items:await shop.items(row.id)});
  });
  app.post('/api/admin/delete',auth,async(req,res)=>res.json(await shop.remove(req.body.id)));
  let draining=false;

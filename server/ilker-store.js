@@ -23,12 +23,14 @@ async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},boo
   duration_minutes INTEGER NOT NULL,sessions_count INTEGER NOT NULL DEFAULT 1,request_key TEXT UNIQUE,created_at TEXT NOT NULL
  );
  CREATE UNIQUE INDEX IF NOT EXISTS ilker_unique_active_slot ON ilker_appointments(date,time) WHERE status='active';
+ CREATE TABLE IF NOT EXISTS ilker_booking_items(booking_id TEXT NOT NULL REFERENCES ilker_appointments(id) ON DELETE CASCADE,position INTEGER NOT NULL,service_id TEXT NOT NULL,service_name TEXT NOT NULL,price_min INTEGER NOT NULL,price_max INTEGER NOT NULL,duration_minutes INTEGER NOT NULL,sessions_count INTEGER NOT NULL,PRIMARY KEY(booking_id,position));
  `);
  for(const service of knownServices)for(const room of ['zal','vip'])await db.prepare('INSERT INTO ilker_service_settings(id,duration_minutes) VALUES(?,?) ON CONFLICT(id) DO NOTHING').run(service.id+':'+room,service.duration_minutes??null);
  }else{
   const rows=await db.prepare('SELECT id FROM ilker_service_settings').all();
   const ids=new Set(rows.map(row=>row.id));
   if(knownServices.some(service=>['zal','vip'].some(room=>!ids.has(service.id+':'+room))))throw new Error('Salon settings are incomplete; migration required');
+  await db.prepare('SELECT booking_id FROM ilker_booking_items LIMIT 1').all();
  }
  async function settings(){return db.prepare('SELECT id,duration_minutes FROM ilker_service_settings').all();}
  async function setDuration(serviceId,room,minutes){
@@ -42,11 +44,15 @@ async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},boo
   const today=new Date(now()+4*3600000).toISOString().slice(0,10),end=new Date(now()+4*3600000+365*86400000).toISOString().slice(0,10);
   return date>=today&&date<=end;
  }
- async function availability(date,serviceId,room){
+ function selection(serviceIds,serviceId){const ids=serviceIds===undefined?[serviceId]:serviceIds;if(!Array.isArray(ids)||!ids.length||ids.length>21||ids.some(id=>typeof id!=='string')||new Set(ids).size!==ids.length)throw fail(400,'Unknown service or room');return ids;}
+ async function selectedServices(ids,room){const values=new Map((await settings()).map(row=>[row.id,row.duration_minutes]));return ids.map(id=>{let item;try{item=quote(id,room);}catch{throw fail(400,'Unknown service or room');}return {...item,durationMinutes:values.get(id+':'+room)??null};});}
+ async function items(bookingId){return db.prepare('SELECT service_id,service_name,price_min,price_max,duration_minutes,sessions_count FROM ilker_booking_items WHERE booking_id=? ORDER BY position').all(bookingId);}
+ async function itemsFor(ids){const result=new Map();if(!ids.length)return result;const rows=await db.prepare(`SELECT booking_id,service_id,service_name,price_min,price_max,duration_minutes,sessions_count FROM ilker_booking_items WHERE booking_id IN (${ids.map(()=>'?').join(',')}) ORDER BY booking_id,position`).all(...ids);for(const {booking_id,...item} of rows){if(!result.has(booking_id))result.set(booking_id,[]);result.get(booking_id).push(item);}return result;}
+ async function availability(date,serviceId,room,serviceIds){
   if(!validDate(date))throw fail(400,'Invalid date');
   let duration=60;
-  if(serviceId!==undefined){try{quote(serviceId,room);}catch{throw fail(400,'Unknown service or room');}
-   const setting=await db.prepare('SELECT duration_minutes FROM ilker_service_settings WHERE id=?').get(serviceId+':'+room);duration=setting?.duration_minutes??null;
+  if(serviceId!==undefined||serviceIds!==undefined){const chosen=await selectedServices(selection(serviceIds,serviceId),room);
+   duration=chosen.some(item=>item.durationMinutes===null)?null:chosen.reduce((sum,item)=>sum+item.durationMinutes,0);
   }
   const dayClosed=Boolean(await db.prepare('SELECT 1 FROM ilker_closed_days WHERE date=?').get(date));
   const rows=await db.prepare("SELECT time,duration_minutes,kind FROM ilker_appointments WHERE date=? AND status='active'").all(date);
@@ -81,18 +87,19 @@ async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},boo
  async function book(input){
   const {date,time,serviceId,room,requestKey}=input;const name=typeof input.name==='string'?input.name.trim():'';const phone=typeof input.phone==='string'?input.phone.trim():'';
   if(!validDate(date)||!interval(time,1)||!time.endsWith(':00')||!name||name.length<2||name.length>80||/[\u0000-\u001f]/.test(name)||!/^\+?[0-9() .-]+$/.test(phone)||phone.replace(/\D/g,'').length<7||phone.replace(/\D/g,'').length>15||!/^[\da-f-]{36}$/i.test(requestKey||''))throw fail(400,'Invalid booking details');
-  let chosen;try{chosen=quote(serviceId,room);}catch{throw fail(400,'Unknown service or room');}
+  const ids=selection(input.serviceIds,serviceId);
   return db.transaction(async()=>{
    const previous=await db.prepare('SELECT * FROM ilker_appointments WHERE request_key=?').get(requestKey);
-   if(previous){if(previous.status!=='active'||previous.date!==date||previous.time!==time||previous.service_id!==serviceId||previous.room!==room||previous.name!==name||previous.phone!==phone)throw fail(409,'Booking retry differs');return previous;}
+   if(previous){const oldItems=await items(previous.id);const previousIds=oldItems.length?oldItems.map(item=>item.service_id):[previous.service_id];if(previous.status!=='active'||previous.date!==date||previous.time!==time||JSON.stringify(previousIds)!==JSON.stringify(ids)||previous.room!==room||previous.name!==name||previous.phone!==phone)throw fail(409,'Booking retry differs');return previous;}
    if(Date.parse(`${date}T${time}:00+04:00`)<=now())throw fail(400,'Booking must be in the future');
-   const setting=await db.prepare('SELECT duration_minutes FROM ilker_service_settings WHERE id=?').get(serviceId+':'+room);
-   if(!setting?.duration_minutes)throw fail(409,'Service duration must be configured');
+   const chosen=await selectedServices(ids,room);if(chosen.some(item=>!item.durationMinutes))throw fail(409,'Service duration must be configured');
+   const duration=chosen.reduce((sum,item)=>sum+item.durationMinutes,0),priceMin=chosen.reduce((sum,item)=>sum+item.priceMin,0),priceMax=chosen.reduce((sum,item)=>sum+item.priceMax,0),fixed=chosen.every(item=>item.actualPrice!==null);
    const existing=await db.prepare("SELECT time,duration_minutes FROM ilker_appointments WHERE date=? AND status='active'").all(date);
    const closed=await db.prepare('SELECT 1 FROM ilker_closed_days WHERE date=?').get(date);
-   if(closed||!isAvailable(time,setting.duration_minutes,existing.map(row=>({time:row.time,durationMinutes:row.duration_minutes}))))throw fail(409,'Time unavailable');
+   if(closed||!isAvailable(time,duration,existing.map(row=>({time:row.time,durationMinutes:row.duration_minutes}))))throw fail(409,'Time unavailable');
    const id=randomUUID();
-   await db.prepare("INSERT INTO ilker_appointments(id,date,time,kind,name,phone,service_id,room,service_name,price_min,price_max,actual_price,duration_minutes,sessions_count,request_key,created_at) VALUES(?,?,?,'booking',?,?,?,?,?,?,?,?,?,?,?,?)").run(id,date,time,name,phone,serviceId,room,chosen.name,chosen.priceMin*100,chosen.priceMax*100,chosen.actualPrice===null?null:chosen.actualPrice*100,setting.duration_minutes,chosen.sessions,requestKey,new Date(now()).toISOString());
+   await db.prepare("INSERT INTO ilker_appointments(id,date,time,kind,name,phone,service_id,room,service_name,price_min,price_max,actual_price,duration_minutes,sessions_count,request_key,created_at) VALUES(?,?,?,'booking',?,?,?,?,?,?,?,?,?,?,?,?)").run(id,date,time,name,phone,ids[0],room,chosen.map(item=>item.name).join(', '),priceMin*100,priceMax*100,fixed?priceMin*100:null,duration,chosen.length===1?chosen[0].sessions:1,requestKey,new Date(now()).toISOString());
+   for(let i=0;i<chosen.length;i++){const item=chosen[i];await db.prepare('INSERT INTO ilker_booking_items(booking_id,position,service_id,service_name,price_min,price_max,duration_minutes,sessions_count) VALUES(?,?,?,?,?,?,?,?)').run(id,i,item.serviceId,item.name,item.priceMin*100,item.priceMax*100,item.durationMinutes,item.sessions);}
    await onBooked(id);return db.prepare('SELECT * FROM ilker_appointments WHERE id=?').get(id);
   });
  }
@@ -119,6 +126,6 @@ async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},boo
   const totalMinor=rooms.reduce((sum,row)=>sum+Number(row.total),0);
   return {totalMinor,total:formatAmount(totalMinor),visits:rooms.reduce((sum,row)=>sum+Number(row.priced_visits),0),unpriced:rooms.reduce((sum,row)=>sum+Number(row.visits)-Number(row.priced_visits),0),rooms};
  }
- return {settings,setDuration,availability,setDay,setSlot,day,cancel,remove,book,setActualPrice,complete,revenue};
+ return {settings,setDuration,availability,setDay,setSlot,day,cancel,remove,book,setActualPrice,complete,revenue,items,itemsFor};
 }
 module.exports={prepareIlkerStore};

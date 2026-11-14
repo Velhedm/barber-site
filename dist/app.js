@@ -7,7 +7,7 @@
   const {t}=window.RTI18n;
   function setMessage(element,key){element.dataset.messageKey=key;element.textContent=t(key);}
   let latestConfirmation=null;
-  const state = {ready:false, submitting:false, confirmed:false, uncertain:false, online:navigator.onLine, offset:0, maxDays:365, hours:[], services:[], room:'zal', date:'', time:'', month:'', availability:null, loading:false, requestKey:crypto.randomUUID(), payload:''};
+  const state = {ready:false, submitting:false, confirmed:false, uncertain:false, online:navigator.onLine, offset:0, maxDays:365, hours:[], services:[], selectedIds:null, room:'zal', date:'', time:'', month:'', availability:null, loading:false, requestKey:crypto.randomUUID(), payload:''};
   let availabilityRequest = null;
   let loadSequence = 0;
   function localDay(offset=0) {return new Date(Date.now()+state.offset+4*3600000+offset*86400000).toISOString().slice(0,10);}
@@ -19,12 +19,18 @@
   function serviceName(item){return window.RTI18n.language==='az'?item.name:(item.translations?.[window.RTI18n.language]||item.name);}
   function groupName(item){return window.RTI18n.language==='az'?item.groupName:(item.groupTranslations?.[window.RTI18n.language]||item.groupName);}
   function formatPrice(item,room=state.room){const price=item?.prices?.[room];return typeof price==='number'?String(price):price?`${price.min}–${price.max}`:'—';}
-  function renderServices(){const select=$('#service'),selected=select.value;const groups=new Map();for(const item of state.services){if(!groups.has(item.group)){const group=document.createElement('optgroup');group.label=groupName(item);groups.set(item.group,group);}groups.get(item.group).append(new Option(`${serviceName(item)} — ${formatPrice(item)} AZN`,item.id));}select.replaceChildren(...groups.values());if(state.services.some(item=>item.id===selected))select.value=selected;}
+  function selectedServices(){return (state.selectedIds||[]).map(id=>state.services.find(item=>item.id===id)).filter(Boolean);}
+  function priceTotal(items,room=state.room){let min=0,max=0;for(const item of items){const price=item.prices[room];min+=typeof price==='number'?price:price.min;max+=typeof price==='number'?price:price.max;}return min===max?String(min):`${min}–${max}`;}
+  function serviceText(key){const labels={add:{az:'Əlavə xidmət seçin',ru:'Добавить услугу',en:'Add a service'},remove:{az:'Sil',ru:'Убрать',en:'Remove'},empty:{az:'Ən azı bir xidmət seçin',ru:'Выберите хотя бы одну услугу',en:'Choose at least one service'}};return labels[key][window.RTI18n.language];}
+  function renderServices(){const select=$('#service'),groups=new Map();for(const item of state.services){if(!groups.has(item.group)){const group=document.createElement('optgroup');group.label=groupName(item);groups.set(item.group,group);}groups.get(item.group).append(new Option(`${serviceName(item)} — ${formatPrice(item)} AZN`,item.id));}select.replaceChildren(new Option(serviceText('add'),''),...groups.values());select.value='';
+   const chosen=$('#selected-services');chosen.replaceChildren(...selectedServices().map(item=>{const row=document.createElement('div');row.className='selected-service';const label=document.createElement('span');label.textContent=`${serviceName(item)} · ${formatPrice(item)} AZN`;const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.setAttribute('aria-label',`${serviceText('remove')}: ${serviceName(item)}`);remove.disabled=state.submitting||state.uncertain;remove.addEventListener('click',()=>{state.selectedIds=state.selectedIds.filter(id=>id!==item.id);selectionChanged();});row.append(label,remove);return row;}));
+  }
+  function selectionChanged(){state.time='';state.availability=null;showError();renderServices();updateSummary();if(state.selectedIds.length)refreshSlots(true);else{loadSequence++;availabilityRequest?.abort();state.loading=false;$('#booking-slots').setAttribute('aria-busy','false');$('#booking-slots').replaceChildren();setMessage($('#slots-status'),serviceText('empty'));}}
   function renderRoom(){document.querySelectorAll('[data-room]').forEach(button=>{button.setAttribute('aria-pressed',String(button.dataset.room===state.room));button.disabled=state.submitting||state.uncertain;});}
   function updateDuration(){const duration=state.availability?.durationMinutes;setMessage($('#duration-label'),Number.isInteger(duration)?`${t('Длительность')}: ${duration} ${t('мин')}`:'Duration to be confirmed');}
   function future(time) {return Date.parse(`${state.date}T${time}:00+04:00`)>Date.now()+state.offset;}
   function free(time) {return state.availability?.date===state.date&&state.availability.slots.some(slot=>slot.time===time&&slot.status==='available')&&future(time);}
-  function service() {return state.services.find(item=>item.id===$('#service').value);}
+  function service() {return selectedServices()[0];}
   function showError(message='') {$('#form-error').hidden=!message;setMessage($('#form-error'),message&&!window.RTI18n.known(message)?'Не удалось выполнить запрос.':message);}
   async function api(url,options={}) {
     const response=await fetch(url,{...options,headers:{'Content-Type':'application/json',...options.headers},cache:'no-store',signal:options.signal||AbortSignal.timeout(15000)});
@@ -33,15 +39,15 @@
     return body;
   }
   function updateSummary() {
-    const item=service();
-    setMessage($('#summary-service'),item?serviceName(item):'—');
+    const items=selectedServices(),item=items[0];
+    setMessage($('#summary-service'),items.length?items.map(serviceName).join(', '):'—');
     setMessage($('#summary-room'),roomName(state.room));
-    setMessage($('#summary-price'),item?`${formatPrice(item)} AZN`:'—');
+    setMessage($('#summary-price'),items.length?`${priceTotal(items)} AZN`:'—');
     setMessage($('#summary-date'),state.date?label(state.date):'Не выбрана');
     setMessage($('#summary-time'),state.time?`${state.time}–${endTime(state.time)}`:'Не выбрано');
-    setMessage($('#service-description'),item?.id==='kids_haircut'&&state.room==='zal'?'До 12 лет — только для обычного зала.':typeof item?.prices?.[state.room]==='object'?'Итоговая стоимость определяется отдельно.':'');
+    setMessage($('#service-description'),items.some(x=>x.id==='kids_haircut')&&state.room==='zal'?'До 12 лет — только для обычного зала.':items.some(x=>typeof x.prices?.[state.room]==='object')?'Итоговая стоимость определяется отдельно.':'');
     renderRoom();updateDuration();
-    $('#confirm-booking').disabled=!state.ready||!state.online||state.submitting||!state.time||(!state.uncertain&&!free(state.time));
+    $('#confirm-booking').disabled=!state.ready||!state.online||state.submitting||!state.time||!state.selectedIds?.length||(!state.uncertain&&!free(state.time));
     setMessage($('#submit-label'),state.submitting?'Подтверждаем…':state.uncertain?'Проверить запись':'Подтвердить запись');
     setMessage($('#submit-hint'),state.uncertain?'Нажми, чтобы получить результат отправленной записи':!state.online?'Нет соединения с интернетом':!state.ready?'Загружаем расписание…':!state.date?'Выбери дату визита':!state.time?'Выбери свободное время':`${label(state.date)} · ${state.time}–${endTime(state.time)} · ${t('Баку')}`);
   }
@@ -82,15 +88,15 @@
   async function refreshSlots(showLoading=false) {
     if(!state.ready||!state.date||state.confirmed||state.submitting||state.uncertain)return;
     if(state.loading&&!showLoading)return;
-    const sequence=++loadSequence,date=state.date,serviceId=service()?.id,room=state.room;if(!serviceId)return;
+    const sequence=++loadSequence,date=state.date,serviceIds=(state.selectedIds||[]).join(','),room=state.room;if(!serviceIds)return;
     availabilityRequest?.abort();availabilityRequest=new AbortController();const controller=availabilityRequest;
     const timeout=setTimeout(()=>controller.abort(),15000);state.loading=true;
     setMessage($('#chosen-date'),label(date,{weekday:'short',day:'numeric',month:'long'}));
     $('#retry-slots').hidden=true;
     if(showLoading){setMessage($('#slots-status'),'Ищем свободное время…');$('#booking-slots').setAttribute('aria-busy','true');$('#booking-slots').replaceChildren(...Array.from({length:8},()=>{const node=document.createElement('span');node.className='skeleton';node.setAttribute('aria-hidden','true');return node;}));}
     try{
-      const data=await api('/api/availability?'+new URLSearchParams({date,serviceId,room}),{signal:controller.signal});
-      if(sequence!==loadSequence||date!==state.date||serviceId!==service()?.id||room!==state.room)return;
+      const data=await api('/api/availability?'+new URLSearchParams({date,serviceIds,room}),{signal:controller.signal});
+      if(sequence!==loadSequence||date!==state.date||serviceIds!==(state.selectedIds||[]).join(',')||room!==state.room)return;
       state.offset=data.serverTime-Date.now();state.availability=data;
       if(state.time&&!free(state.time)){state.time='';showError('Выбранное время уже недоступно. Пожалуйста, выбери другой час.');}
       renderSlots();
@@ -107,7 +113,7 @@
   async function initialize(){
     $('#retry-load').disabled=true;
     try{
-      const meta=await api('/api/meta');if(meta.brand!=='İlker Sevim Barber Club')throw new Error('Brand catalog is not ready');state.offset=meta.serverTime-Date.now();state.hours=meta.hours;state.services=meta.services;state.maxDays=meta.maxDaysAhead;state.ready=true;
+      const meta=await api('/api/meta');if(meta.brand!=='İlker Sevim Barber Club')throw new Error('Brand catalog is not ready');state.offset=meta.serverTime-Date.now();state.hours=meta.hours;state.services=meta.services;state.selectedIds=meta.services.length?[meta.services[0].id]:[];state.maxDays=meta.maxDaysAhead;state.ready=true;
       renderServices();$('#service').disabled=false;
       $('#load-error').hidden=true;state.month=localDay().slice(0,7);selectDate(localDay());
     }catch{
@@ -119,11 +125,11 @@
     const name=$('#customer-name').value.trim(),phone=$('#customer-phone').value.trim();
     if(name.length<2||/[\u0000-\u001f]/.test(name)){showError('Укажи имя — минимум 2 символа.');$('#customer-name').focus();return;}
     const digits=phone.replace(/\D/g,'');if(!/^\+?[0-9() .-]+$/.test(phone)||digits.length<7||digits.length>15){showError('Проверь номер телефона, например +994 10 321 51 51.');$('#customer-phone').focus();return;}
-    if(!state.ready||!state.online||!state.date||!state.time||(!state.uncertain&&!free(state.time))){showError('Выбери доступную дату и свободное время.');return;}
-    const payload={name,phone,date:state.date,time:state.time,serviceId:service().id,room:state.room};const serialized=JSON.stringify(payload);
+    if(!state.ready||!state.online||!state.date||!state.time||!state.selectedIds?.length||(!state.uncertain&&!free(state.time))){showError('Выбери доступную дату и свободное время.');return;}
+    const payload={name,phone,date:state.date,time:state.time,serviceIds:[...state.selectedIds],room:state.room};const serialized=JSON.stringify(payload);
     if(serialized!==state.payload){state.payload=serialized;state.requestKey=crypto.randomUUID();}
-    const bookedService={...service(),quotedPrice:formatPrice(service()),room:state.room,durationMinutes:state.availability?.durationMinutes};state.submitting=true;loadSequence++;availabilityRequest?.abort();state.loading=false;
-    $('#booking-form').setAttribute('aria-busy','true');$('#confirm-booking').classList.add('is-loading');setMessage($('#submit-label'),'Подтверждаем…');$('#service').disabled=true;$('#customer-name').readOnly=true;$('#customer-phone').readOnly=true;renderSlots();renderCalendar();updateSummary();
+    const bookedService={items:selectedServices(),quotedPrice:priceTotal(selectedServices()),room:state.room,durationMinutes:state.availability?.durationMinutes};state.submitting=true;loadSequence++;availabilityRequest?.abort();state.loading=false;
+    $('#booking-form').setAttribute('aria-busy','true');$('#confirm-booking').classList.add('is-loading');setMessage($('#submit-label'),'Подтверждаем…');$('#service').disabled=true;$('#customer-name').readOnly=true;$('#customer-phone').readOnly=true;renderServices();renderSlots();renderCalendar();updateSummary();
     try{
       const result=await api('/api/bookings',{method:'POST',body:JSON.stringify({...payload,requestKey:state.requestKey})});
       state.confirmed=true;state.uncertain=false;$('#booking-layout').hidden=true;$('#booking-success').hidden=false;
@@ -135,7 +141,7 @@
       else showError(error.status?error.message:'Не удалось получить подтверждение. Нажми ещё раз с теми же данными — повторная отправка не создаст вторую запись.');
     }finally{
       state.submitting=false;$('#booking-form').setAttribute('aria-busy','false');$('#confirm-booking').classList.remove('is-loading');setMessage($('#submit-label'),'Подтвердить запись');$('#service').disabled=!state.ready||state.uncertain;$('#customer-name').readOnly=state.uncertain;$('#customer-phone').readOnly=state.uncertain;
-      if(!state.confirmed){renderCalendar();updateSummary();refreshSlots();}
+      if(!state.confirmed){renderServices();renderCalendar();updateSummary();refreshSlots();}
     }
   });
 
@@ -143,7 +149,7 @@
     $('#success-date').textContent=label(result.date,{day:'numeric',month:'long',year:'numeric'});
     $('#success-time').textContent=`${result.time}–${endTime(result.time,result.durationMinutes)}`;
     $('#success-room').textContent=roomName(bookedService.room);
-    $('#success-service').textContent=serviceName(bookedService);$('#success-price').textContent=bookedService.quotedPrice+' AZN';
+    $('#success-service').textContent=bookedService.items.map(serviceName).join(', ');$('#success-price').textContent=bookedService.quotedPrice+' AZN';
     $('#success-reference').textContent=t('Номер записи: ')+result.id;
   }
   document.addEventListener('languagechange',()=>{
@@ -151,19 +157,19 @@
     if(state.ready)renderServices();
     renderCalendar();if(state.availability&&!state.loading)renderSlots();
     if(state.date)$('#chosen-date').textContent=label(state.date,{weekday:'short',day:'numeric',month:'long'});
-    updateSummary();renderConfirmation();
+    updateSummary();renderConfirmation();if(state.ready&&!state.selectedIds?.length)setMessage($('#slots-status'),serviceText('empty'));
     for(const input of [$('#customer-name'),$('#customer-phone')])input.setCustomValidity('');
   });
   for(const input of [$('#customer-name'),$('#customer-phone')]){
     input.addEventListener('input',()=>input.setCustomValidity(''));
     input.addEventListener('invalid',()=>{input.setCustomValidity('');if(input.validity.valueMissing)input.setCustomValidity(t('Please fill in this field.'));else if(input.validity.tooShort)input.setCustomValidity(t('Укажи имя — минимум 2 символа.'));});
   }
-  $('#service').addEventListener('change',()=>{if(state.submitting||state.uncertain)return;state.time='';state.availability=null;showError();updateSummary();refreshSlots(true);});
+  $('#service').addEventListener('change',()=>{if(state.submitting||state.uncertain)return;const id=$('#service').value;if(id&&!state.selectedIds.includes(id))state.selectedIds.push(id);selectionChanged();});
   document.querySelectorAll('[data-room]').forEach(button=>button.addEventListener('click',()=>{if(state.submitting||state.uncertain||button.dataset.room===state.room)return;state.room=button.dataset.room;state.time='';state.availability=null;showError();renderServices();updateSummary();refreshSlots(true);}));
   $('#month-prev').addEventListener('click',()=>shiftMonth(-1));$('#month-next').addEventListener('click',()=>shiftMonth(1));
   $('#calendar-days').addEventListener('keydown',event=>{const date=event.target.dataset.date,delta={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[event.key];if(!date||delta===undefined)return;event.preventDefault();const d=dateObject(date);d.setUTCDate(d.getUTCDate()+delta);const target=d.toISOString().slice(0,10);if(!validDate(target))return;state.month=target.slice(0,7);renderCalendar(target);});
   $('#retry-load').addEventListener('click',initialize);$('#retry-slots').addEventListener('click',()=>refreshSlots(true));
-  $('#another-booking').addEventListener('click',()=>{state.confirmed=false;state.uncertain=false;state.room='zal';state.requestKey=crypto.randomUUID();state.payload='';$('#booking-form').reset();renderServices();showError();$('#booking-success').hidden=true;$('#booking-layout').hidden=false;state.month=localDay().slice(0,7);selectDate(localDay());$('#service').focus({preventScroll:true});});
+  $('#another-booking').addEventListener('click',()=>{state.confirmed=false;state.uncertain=false;state.room='zal';state.selectedIds=state.services.length?[state.services[0].id]:[];state.requestKey=crypto.randomUUID();state.payload='';$('#booking-form').reset();renderServices();showError();$('#booking-success').hidden=true;$('#booking-layout').hidden=false;state.month=localDay().slice(0,7);selectDate(localDay());$('#service').focus({preventScroll:true});});
   addEventListener('offline',()=>{state.online=false;updateSummary();});
   addEventListener('online',()=>{state.online=true;if(!state.ready)initialize();else refreshSlots(true);updateSummary();});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state.ready){renderCalendar();refreshSlots();}});

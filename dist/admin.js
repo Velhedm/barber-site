@@ -28,7 +28,9 @@
   const service=document.createElement('p');const area=row.room==='vip'?'VIP OTAQ':'ZAL';
   const listed=row.price_min===row.price_max?formatMinor(row.price_min):`${formatMinor(row.price_min)} – ${formatMinor(row.price_max)}`;
   const cost=row.actual_price===null?`${listed} · итоговая цена не указана`:formatMinor(row.actual_price);
-  service.className='appointment-service';const serviceName=document.createElement('span');serviceName.className='appointment-service-name';serviceName.textContent=row.service_name;const serviceDetails=document.createElement('span');serviceDetails.className='appointment-service-details';serviceDetails.textContent=`${area} · ${row.duration_minutes} мин · ${cost}`;service.append(serviceName,serviceDetails);box.append(service);
+  service.className='appointment-service';const serviceName=document.createElement('span');serviceName.className='appointment-service-name';serviceName.textContent=row.service_name;service.append(serviceName);
+  if(row.items?.length>1)for(const item of row.items){const detail=document.createElement('span');detail.className='appointment-service-details';detail.textContent=`${item.service_name} · ${item.price_min===item.price_max?formatMinor(item.price_min):`${formatMinor(item.price_min)} – ${formatMinor(item.price_max)}`}`;service.append(detail);}
+  const serviceDetails=document.createElement('span');serviceDetails.className='appointment-service-details';serviceDetails.textContent=`${area} · ${row.duration_minutes} мин · ${cost}`;service.append(serviceDetails);box.append(service);
   const actions=document.createElement('div');actions.className='action-row';
   function addAction(label,handler,danger=false){const button=document.createElement('button');button.type='button';button.className='text-button'+(danger?' danger':'');button.textContent=label;button.addEventListener('click',async()=>{button.disabled=true;try{await handler();}finally{button.disabled=false;}});actions.append(button);}
   if(row.status==='active'){
