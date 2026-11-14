@@ -1,25 +1,25 @@
 'use strict';
 (() => {
  const dictionary = {
- "Ruslan True — Онлайн-запись к барберу": {
-  "az": "Ruslan True — Onlayn rezervasiya",
-  "en": "Ruslan True — Book your barber",
-  "ru": "Ruslan True — Онлайн-запись к барберу"
+ "İlker Sevim Barber Club — Онлайн-запись к барберу": {
+  "az": "İlker Sevim Barber Club — Onlayn rezervasiya",
+  "en": "İlker Sevim Barber Club — Book your barber",
+  "ru": "İlker Sevim Barber Club — Онлайн-запись к барберу"
  },
- "Запишитесь к Руслану: мужские и детские стрижки, оформление бороды и уход. Выберите удобный день и свободное время онлайн.": {
-  "az": "Ruslanın qəbuluna yazılın: kişi və uşaq saç kəsimi, saqqal formalaşdırılması və qulluq. Uyğun gün və saatı onlayn seçin.",
-  "en": "Book with Ruslan: men’s and children’s haircuts, beard shaping and grooming. Choose your date and time online.",
-  "ru": "Запишитесь к Руслану: мужские и детские стрижки, оформление бороды и уход. Выберите удобный день и свободное время онлайн."
+ "Запишитесь к İlker Sevim: мужские и детские стрижки, оформление бороды и уход. Выберите удобный день и свободное время онлайн.": {
+  "az": "İlker Sevim-in qəbuluna yazılın: kişi və uşaq saç kəsimi, saqqal formalaşdırılması və qulluq. Uyğun gün və saatı onlayn seçin.",
+  "en": "Book with İlker Sevim: men’s and children’s haircuts, beard shaping and grooming. Choose your date and time online.",
+  "ru": "Запишитесь к İlker Sevim: мужские и детские стрижки, оформление бороды и уход. Выберите удобный день и свободное время онлайн."
  },
  "Перейти к записи": {
   "az": "Rezervasiyaya keç",
   "en": "Skip to booking",
   "ru": "Перейти к записи"
  },
- "Ruslan True — главная": {
-  "az": "Ruslan True — ana səhifə",
-  "en": "Ruslan True — home",
-  "ru": "Ruslan True — главная"
+ "İlker Sevim Barber Club — главная": {
+  "az": "İlker Sevim Barber Club — ana səhifə",
+  "en": "İlker Sevim Barber Club — home",
+  "ru": "İlker Sevim Barber Club — главная"
  },
  "BARBER · BAKU": {
   "az": "BARBER · BAKI",
@@ -51,20 +51,20 @@
   "en": "A haircut that suits you.",
   "ru": "Стрижка, которая подходит тебе."
  },
- "Выбери удобное время — Руслан позаботится об остальном.": {
-  "az": "Uyğun vaxtı seç — qalanını Ruslana həvalə et.",
-  "en": "Choose your time — Ruslan will take care of the rest.",
-  "ru": "Выбери удобное время — Руслан позаботится об остальном."
+ "Выбери удобное время — İlker Sevim позаботится об остальном.": {
+  "az": "Uyğun vaxtı seç — qalanını İlker Sevim-ə həvalə et.",
+  "en": "Choose your time — İlker Sevim will take care of the rest.",
+  "ru": "Выбери удобное время — İlker Sevim позаботится об остальном."
  },
  "Записаться": {
   "az": "Rezervasiya et",
   "en": "Book now",
   "ru": "Записаться"
  },
- "Руслан": {
-  "az": "Ruslan",
-  "en": "Ruslan",
-  "ru": "Руслан"
+ "İlker Sevim": {
+  "az": "İlker Sevim",
+  "en": "İlker Sevim",
+  "ru": "İlker Sevim"
  },
  "Индивидуальный": {
   "az": "Fərdi",
@@ -206,11 +206,6 @@
   "en": "Choose a date",
   "ru": "Выбери дату"
  },
- "Визит · 1 час": {
-  "az": "Ziyarət · 1 saat",
-  "en": "Visit · 1 hour",
-  "ru": "Визит · 1 час"
- },
  "Свободное время появится здесь.": {
   "az": "Boş saatlar burada göstəriləcək.",
   "en": "Available times will appear here.",
@@ -296,15 +291,15 @@
   "en": "Choose a date and available time",
   "ru": "Выбери дату и свободное время"
  },
- "Отправляя форму, ты соглашаешься передать Руслану свои контакты и детали записи для организации визита.": {
-  "az": "Formanı göndərməklə ziyarətin təşkili üçün əlaqə və rezervasiya məlumatlarının Ruslana ötürülməsinə razılıq verirsən.",
-  "en": "By submitting this form, you agree to share your contact and booking details with Ruslan to arrange your visit.",
-  "ru": "Отправляя форму, ты соглашаешься передать Руслану свои контакты и детали записи для организации визита."
+ "Отправляя форму, ты соглашаешься передать İlker Sevim свои контакты и детали записи для организации визита.": {
+  "az": "Formanı göndərməklə ziyarətin təşkili üçün əlaqə və rezervasiya məlumatlarının İlker Sevim-ə ötürülməsinə razılıq verirsən.",
+  "en": "By submitting this form, you agree to share your contact and booking details with İlker Sevim to arrange your visit.",
+  "ru": "Отправляя форму, ты соглашаешься передать İlker Sevim свои контакты и детали записи для организации визита."
  },
- "ДО ВСТРЕЧИ У РУСЛАНА": {
-  "az": "RUSLANIN YANINDA GÖRÜŞƏNƏDƏK",
-  "en": "SEE YOU AT RUSLAN’S",
-  "ru": "ДО ВСТРЕЧИ У РУСЛАНА"
+ "ДО ВСТРЕЧИ В İLKER SEVİM": {
+  "az": "İLKER SEVİM-DƏ GÖRÜŞƏNƏDƏK",
+  "en": "SEE YOU AT İLKER SEVİM",
+  "ru": "ДО ВСТРЕЧИ В İLKER SEVİM"
  },
  "Ты записан": {
   "az": "Rezervasiya təsdiqləndi",
@@ -326,20 +321,20 @@
   "en": "Price",
   "ru": "Стоимость"
  },
- "Связаться с Русланом": {
-  "az": "Ruslanla əlaqə saxla",
-  "en": "Contact Ruslan",
-  "ru": "Связаться с Русланом"
+ "Связаться с командой İlker Sevim": {
+  "az": "İlker Sevim ilə əlaqə saxla",
+  "en": "Contact İlker Sevim",
+  "ru": "Связаться с командой İlker Sevim"
  },
  "Записаться ещё": {
   "az": "Yeni rezervasiya",
   "en": "Book another visit",
   "ru": "Записаться ещё"
  },
- "Если планы изменятся, позвони Руслану.": {
-  "az": "Planların dəyişərsə, Ruslana zəng et.",
-  "en": "If your plans change, call Ruslan.",
-  "ru": "Если планы изменятся, позвони Руслану."
+ "Если планы изменятся, позвони İlker Sevim.": {
+  "az": "Planların dəyişərsə, İlker Sevim-ə zəng et.",
+  "en": "If your plans change, call İlker Sevim.",
+  "ru": "Если планы изменятся, позвони İlker Sevim."
  },
  "Твой стиль начинается с деталей.": {
   "az": "Üslubun detallardan başlayır.",
@@ -446,20 +441,20 @@
   "en": "You’re offline. Check your connection.",
   "ru": "Нет интернета. Проверь соединение."
  },
- "Не удалось загрузить расписание. Попробуй ещё раз или позвони Руслану: +994 51 351 39 55.": {
-  "az": "Cədvəli yükləmək mümkün olmadı. Yenidən cəhd et və ya Ruslana zəng et: +994 51 351 39 55.",
-  "en": "Could not load the schedule. Try again or call Ruslan: +994 51 351 39 55.",
-  "ru": "Не удалось загрузить расписание. Попробуй ещё раз или позвони Руслану: +994 51 351 39 55."
+ "Не удалось загрузить расписание. Попробуй ещё раз или позвони İlker Sevim: +994 10 321 51 51.": {
+  "az": "Cədvəli yükləmək mümkün olmadı. Yenidən cəhd et və ya İlker Sevim-ə zəng et: +994 10 321 51 51.",
+  "en": "Could not load the schedule. Try again or call İlker Sevim: +994 10 321 51 51.",
+  "ru": "Не удалось загрузить расписание. Попробуй ещё раз или позвони İlker Sevim: +994 10 321 51 51."
  },
  "Укажи имя — минимум 2 символа.": {
   "az": "Adını daxil et — ən azı 2 simvol.",
   "en": "Enter your name — at least 2 characters.",
   "ru": "Укажи имя — минимум 2 символа."
  },
- "Проверь номер телефона, например +994 51 351 39 55.": {
-  "az": "Telefon nömrəsini yoxla, məsələn +994 51 351 39 55.",
-  "en": "Check your phone number, for example +994 51 351 39 55.",
-  "ru": "Проверь номер телефона, например +994 51 351 39 55."
+ "Проверь номер телефона, например +994 10 321 51 51.": {
+  "az": "Telefon nömrəsini yoxla, məsələn +994 10 321 51 51.",
+  "en": "Check your phone number, for example +994 10 321 51 51.",
+  "ru": "Проверь номер телефона, например +994 10 321 51 51."
  },
  "Выбери доступную дату и свободное время.": {
   "az": "Uyğun tarix və boş saat seç.",
@@ -601,11 +596,6 @@
   "en": "Find Us",
   "ru": "Как нас найти"
  },
- "22 Bunyad Sardarov Street, Baku, Azerbaijan": {
-  "az": "Bünyad Sərdarov küçəsi 22, Bakı, Azərbaycan",
-  "en": "22 Bunyad Sardarov Street, Baku, Azerbaijan",
-  "ru": "Bunyad Serdarov 22, Baku, Azerbaijan"
- },
  "Open in Google Maps": {
   "az": "Google Maps-də aç",
   "en": "Open in Google Maps",
@@ -620,10 +610,135 @@
   "az": "Bu xananı doldur.",
   "en": "Please fill in this field.",
   "ru": "Заполните это поле."
+ },
+ "Parlament küçəsi, Bakı, Azərbaycan": {
+  "az": "Parlament küçəsi, Bakı, Azərbaycan",
+  "ru": "улица Парламента, Баку, Азербайджан",
+  "en": "Parlament Street, Baku, Azerbaijan"
+ },
+ "Opening hours": {
+  "az": "İş saatları",
+  "ru": "Часы работы",
+  "en": "Opening hours"
+ },
+ "Design detail in every style": {
+  "az": "Üslub hər detala diqqətdir.",
+  "ru": "Стиль — это внимание к каждой детали.",
+  "en": "Style is attention to every detail."
+ },
+ "Illustrative interior": {
+  "az": "İNTERYER İLLÜSTRASİYASI",
+  "ru": "ИЛЛЮСТРАЦИЯ ИНТЕРЬЕРА",
+  "en": "ILLUSTRATIVE INTERIOR"
+ },
+ "Barber interior illustration": {
+  "az": "Barber interyerinin illüstrasiyası",
+  "ru": "Иллюстрация интерьера барбершопа",
+  "en": "Illustration of a barbershop interior"
+ },
+ "Duration to be confirmed": {
+  "az": "Müddət · dəqiqləşdirilir",
+  "ru": "Длительность уточняется",
+  "en": "Duration to be confirmed"
+ },
+ "Категория обслуживания": {
+  "az": "Xidmət məkanı",
+  "ru": "Категория обслуживания",
+  "en": "Service area"
+ },
+ "Выберите зал": {
+  "az": "Zalı seçin",
+  "ru": "Выберите зал",
+  "en": "Choose an area"
+ },
+ "Зал": {
+  "az": "ZAL",
+  "ru": "ZAL",
+  "en": "ZAL"
+ },
+ "VIP-комната": {
+  "az": "VIP OTAQ",
+  "ru": "VIP OTAQ",
+  "en": "VIP OTAQ"
+ },
+ "До 12 лет — только для обычного зала.": {
+  "az": "ZAL üçün 12 yaşadək.",
+  "ru": "В обычном зале — до 12 лет.",
+  "en": "In ZAL, for children under 12."
+ },
+ "Итоговая стоимость определяется отдельно.": {
+  "az": "Yekun qiymət ayrıca dəqiqləşdirilir.",
+  "ru": "Итоговая стоимость уточняется отдельно.",
+  "en": "The final price is confirmed separately."
+ },
+ "Длительность услуги ещё не установлена. Свяжитесь с нами.": {
+  "az": "Xidmətin müddəti hələ təyin edilməyib. Bizimlə əlaqə saxlayın.",
+  "ru": "Длительность услуги ещё не установлена. Свяжитесь с нами.",
+  "en": "The service duration has not been set yet. Please contact us."
+ },
+ "Длительность": {
+  "az": "Müddət",
+  "ru": "Длительность",
+  "en": "Duration"
+ },
+ "мин": {
+  "az": "dəq",
+  "ru": "мин",
+  "en": "min"
+ },
+ "Место": {
+  "az": "Məkan",
+  "ru": "Зал",
+  "en": "Area"
+ },
+ "Время недоступно": {
+  "az": "Vaxt mövcud deyil",
+  "ru": "Время недоступно",
+  "en": "Time unavailable"
+ },
+ "Invalid booking details": {
+  "az": "Rezervasiya məlumatlarını yoxlayın.",
+  "ru": "Проверьте данные записи.",
+  "en": "Check your booking details."
+ },
+ "Unknown service or room": {
+  "az": "Xidməti və zalı yoxlayın.",
+  "ru": "Проверьте услугу и зал.",
+  "en": "Check the service and area."
+ },
+ "Service duration must be configured": {
+  "az": "Xidmətin müddəti hələ təyin edilməyib. Bizimlə əlaqə saxlayın.",
+  "ru": "Длительность услуги ещё не установлена. Свяжитесь с нами.",
+  "en": "The service duration has not been set yet. Please contact us."
+ },
+ "Time unavailable": {
+  "az": "Bu vaxt artıq mövcud deyil. Başqa saat seçin.",
+  "ru": "Это время уже недоступно. Выберите другой час.",
+  "en": "This time is no longer available. Choose another hour."
+ },
+ "Booking must be in the future": {
+  "az": "Gələcək tarix və saat seçin.",
+  "ru": "Выберите время в будущем.",
+  "en": "Choose a future time."
+ },
+ "Booking retry differs": {
+  "az": "Təkrar sorğu əvvəlki rezervasiyadan fərqlənir.",
+  "ru": "Повторный запрос отличается от исходной записи.",
+  "en": "The retry differs from the original booking."
+ },
+ "Phone contact": {
+  "az": "Telefon",
+  "ru": "Телефон",
+  "en": "Phone"
+ },
+ "Social links": {
+  "az": "Sosial şəbəkələr",
+  "ru": "Социальные сети",
+  "en": "Social links"
  }
 };
- let language='ru';
- try {const saved=localStorage.getItem('ruslantrue.language');if(['ru','az','en'].includes(saved))language=saved;else if(saved!==null)localStorage.setItem('ruslantrue.language','ru');}catch{/* Language still works when storage is unavailable. */}
+ let language='az';
+ try {const saved=localStorage.getItem('ilkersevim.language');if(['ru','az','en'].includes(saved))language=saved;else if(saved!==null)localStorage.setItem('ilkersevim.language','az');}catch{/* Language still works when storage is unavailable. */}
  const t=key=>dictionary[key]?.[language]??key;
  const aliases=new Map();for(const [key,values]of Object.entries(dictionary))for(const value of [key,values.ru,values.az,values.en])aliases.set(value.trim(),key);
  const texts=[],attributes=[];
@@ -631,7 +746,7 @@
  while(walker.nextNode()){const node=walker.currentNode;if(node.parentElement?.closest('script,style'))continue;const key=aliases.get(node.nodeValue.trim());if(key)texts.push({node,key,leading:node.nodeValue.match(/^\s*/)[0],trailing:node.nodeValue.match(/\s*$/)[0]});}
  for(const node of document.querySelectorAll('[aria-label],[placeholder],[alt],meta[name=description]'))for(const attr of ['aria-label','placeholder','alt','content']){const value=node.getAttribute(attr);const key=value&&aliases.get(value.trim());if(key)attributes.push({node,attr,key});}
  function apply(){document.documentElement.lang=language;for(const item of texts)item.node.nodeValue=item.leading+t(item.key)+item.trailing;for(const item of attributes)item.node.setAttribute(item.attr,t(item.key));for(const button of document.querySelectorAll('[data-language]'))button.setAttribute('aria-pressed',String(button.dataset.language===language));}
- function setLanguage(value){if(!['ru','az','en'].includes(value)||value===language)return;language=value;try{localStorage.setItem('ruslantrue.language',language);}catch{}apply();document.dispatchEvent(new CustomEvent('languagechange'));}
+ function setLanguage(value){if(!['ru','az','en'].includes(value)||value===language)return;language=value;try{localStorage.setItem('ilkersevim.language',language);}catch{}apply();document.dispatchEvent(new CustomEvent('languagechange'));}
  // Explicit month/day names also support browsers with incomplete Azerbaijani locale data.
  const months={ru:['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'],az:['yanvar','fevral','mart','aprel','may','iyun','iyul','avqust','sentyabr','oktyabr','noyabr','dekabr'],en:['January','February','March','April','May','June','July','August','September','October','November','December']};
  const weekdays={ru:['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'],az:['bazar','bazar ertəsi','çərşənbə axşamı','çərşənbə','cümə axşamı','cümə','şənbə'],en:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']};

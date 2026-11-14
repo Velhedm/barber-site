@@ -14,10 +14,10 @@ test('Neon: two servers, atomic reservations, owner controls, durable sessions a
  const salt='1234567890abcdef1234567890abcdef';
  const configuration={...options,databaseUrl:url.href,bookingLimit:100,adminHash:salt+':'+scryptSync('test-owner-password',salt,64).toString('hex'),now:()=>Date.parse('2030-01-01T05:00:00Z'),vapid:{...generateVAPIDKeys(),subject:'mailto:test@example.com'},pushSend:async()=>({statusCode:201})};
  const instances=[];
- async function start(){const r=await createApp(configuration);const server=r.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));const base='http://127.0.0.1:'+server.address().port;
+ async function start(){const r=await createApp(configuration);await r.shop.setDuration('haircut','zal',60);const server=r.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));const base='http://127.0.0.1:'+server.address().port;
  const request=async(url,body,headers={})=>{const response=await fetch(base+url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...headers},body:body?JSON.stringify(body):undefined});return {status:response.status,headers:response.headers,data:await response.json()};};
  const stop=async()=>{await new Promise(resolve=>server.close(resolve));await r.close();};const instance={...r,request,stop};instances.push(instance);return instance;}
- const booking=()=>({date:'2030-01-02',time:'14:00',name:'Test Customer',phone:'+994501234567',serviceId:'haircut',requestKey:randomUUID()});
+ const booking=()=>({date:'2030-01-02',time:'14:00',name:'Test Customer',phone:'+994501234567',serviceId:'haircut',room:'zal',requestKey:randomUUID()});
  try{
   const a=await start(),b=await start();
   const login=await a.request('/api/admin/login',{password:'test-owner-password'});assert.equal(login.status,200);

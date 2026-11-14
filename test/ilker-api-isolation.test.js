@@ -1,0 +1,22 @@
+'use strict';
+const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const {scryptSync,randomUUID,createHash}=require('node:crypto');const {generateVAPIDKeys}=require('web-push');const {createDatabase}=require('../server/database');const {createApp}=require('../server/app');
+test('HTTP routes isolate legacy bookings, sessions and push subscriptions in the same database',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ilker-isolation-'));const filename=path.join(dir,'test.sqlite');const legacy=await createDatabase({databasePath:filename,databaseUrl:''});
+ await legacy.prepare("INSERT INTO slots(id,date,time,kind,name,phone,created_at) VALUES(?,?,?,'booking',?,?,?)").run('old','2030-01-02','10:00','Old owner customer','+994500000000','2030-01-01');
+ await legacy.prepare('INSERT INTO sessions(token_hash,csrf,expires) VALUES(?,?,?)').run(createHash('sha256').update('oldcookie').digest('hex'),'oldcsrf',Date.parse('2031-01-01'));
+ await legacy.prepare('INSERT INTO push_subscriptions(id,endpoint,subscription,created_at) VALUES(?,?,?,?)').run('oldsub','https://fcm.googleapis.com/old','{}',1);await legacy.close();
+ const salt='1234567890abcdef1234567890abcdef';let delivered=0;const r=await createApp({databasePath:filename,databaseUrl:'',bookingLimit:100,now:()=>Date.parse('2030-01-01T00:00:00Z'),adminHash:salt+':'+scryptSync('test-owner-password',salt,64).toString('hex'),vapid:{...generateVAPIDKeys(),subject:'mailto:test@example.com'},pushSend:async()=>{delivered++;return {statusCode:201}}});
+ const server=r.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));const base='http://127.0.0.1:'+server.address().port;
+ async function request(url,body,headers={}){const response=await fetch(base+url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...headers},body:body?JSON.stringify(body):undefined});return {status:response.status,response,data:await response.json()};}
+ try{
+  assert.equal((await request('/api/admin/session',undefined,{Cookie:'rt_session=oldcookie'})).status,401);
+  assert.equal((await request('/api/admin/services')).status,401);const login=await request('/api/admin/login',{password:'test-owner-password'});const headers={Cookie:login.response.headers.get('set-cookie').split(';')[0],'X-CSRF-Token':login.data.csrf};
+  assert.equal((await request('/api/admin/push/config',undefined,headers)).data.deviceCount,0);assert.equal((await request('/api/admin/booking/old',undefined,headers)).status,404);assert.equal((await request('/api/admin/bookings',undefined,headers)).data.count,0);
+  const meta=(await request('/api/meta')).data;assert.equal(meta.brand,'İlker Sevim Barber Club');assert.equal(meta.services.length,21);assert.equal(meta.services.find(s=>s.id==='haircut').prices.zal,35);
+  for(const room of ['zal','vip'])assert.equal((await request('/api/admin/duration',{serviceId:'haircut',room,minutes:90},headers)).status,200);
+  const availability=(await request('/api/availability?date=2030-01-02&serviceId=haircut&room=zal')).data;assert.equal(availability.slots.find(s=>s.time==='10:00').status,'available');
+  const booking=(time,room)=>({date:'2030-01-02',time,name:'New customer',phone:'+994501234567',serviceId:'haircut',room,requestKey:randomUUID()});
+  const result=await Promise.all([request('/api/bookings',booking('10:00','zal')),request('/api/bookings',booking('11:00','vip'))]);assert.deepEqual(result.map(x=>x.status).sort(),[201,409]);
+  await r.drainOutbox();assert.equal(delivered,0);const list=(await request('/api/admin/bookings',undefined,headers)).data;assert.equal(list.count,1);assert.equal(JSON.stringify(list).includes('Old owner customer'),false);const history=await request('/api/admin/bookings?status=all&q='+encodeURIComponent('+994 (50) 123-45-67'),undefined,headers);assert.equal(history.data.count,1);assert.equal((await request('/api/admin/cancel',{id:'old'},headers)).status,404);
+ }finally{await new Promise(resolve=>server.close(resolve));await r.close();const check=await createDatabase({databasePath:filename,databaseUrl:''});assert.equal((await check.prepare('SELECT name FROM slots WHERE id=?').get('old')).name,'Old owner customer');assert.equal((await check.prepare('SELECT count(*) AS n FROM push_subscriptions').get()).n,1);await check.close();fs.rmSync(dir,{recursive:true,force:true});}
+});

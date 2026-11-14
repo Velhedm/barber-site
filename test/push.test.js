@@ -3,11 +3,11 @@ const {test}=require('node:test');const assert=require('node:assert/strict');con
 const salt='1234567890abcdef1234567890abcdef';const adminHash=salt+':'+scryptSync('test-owner-password',salt,64).toString('hex');
 const vapid={...generateVAPIDKeys(),subject:'mailto:test@example.com'};
 function subscription(id){return {endpoint:'https://fcm.googleapis.com/fcm/send/'+id,expirationTime:null,keys:{p256dh:generateVAPIDKeys().publicKey,auth:randomBytes(16).toString('base64url')}};}
-async function fixture(pushSend){let clock=Date.parse('2030-01-01T05:00:00Z');const r=await createApp({databasePath:':memory:',vapid,adminHash,now:()=>clock,pushSend});const server=r.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));const base='http://127.0.0.1:'+server.address().port;
+async function fixture(pushSend){let clock=Date.parse('2030-01-01T05:00:00Z');const r=await createApp({databasePath:':memory:',vapid,adminHash,now:()=>clock,pushSend});await r.shop.setDuration('haircut','zal',60);const server=r.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));const base='http://127.0.0.1:'+server.address().port;
 const request=async(url,body,headers={})=>{const response=await fetch(base+url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...headers},body:body?JSON.stringify(body):undefined});return {status:response.status,response,data:await response.json()};};
 const login=await request('/api/admin/login',{password:'test-owner-password'});const headers={Cookie:login.response.headers.get('set-cookie').split(';')[0],'X-CSRF-Token':login.data.csrf};
 return {...r,base,headers,request,tick:()=>{clock+=3600000;},stop:async()=>{await new Promise(resolve=>server.close(resolve));await r.close();}};}
-const booking=()=>({date:'2030-01-02',time:'14:00',name:'Private Customer',phone:'+994501234567',serviceId:'haircut',requestKey:randomUUID()});
+const booking=()=>({date:'2030-01-02',time:'14:00',name:'Private Customer',phone:'+994501234567',serviceId:'haircut',room:'zal',requestKey:randomUUID()});
 test('owner-only subscriptions, endpoint validation, fan-out, retries, 410 cleanup and private payloads',async()=>{
 const calls=[];let fail=true;const f=await fixture(async(sub,payload)=>{calls.push({endpoint:sub.endpoint,payload:JSON.parse(payload)});if(sub.endpoint.endsWith('/gone'))throw {statusCode:410};if(sub.endpoint.endsWith('/retry')&&fail)throw {statusCode:503};return {statusCode:201};});
 try{

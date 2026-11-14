@@ -1,8 +1,8 @@
 'use strict';
-const CACHE='ruslan-owner-shell-v1';
-const SHELL=['/admin.html','/admin.css','/admin.js','/style.css','/offline.html','/icons/icon-192.png','/icons/icon-512.png','/icons/apple-touch-icon.png'];
+const CACHE='ilker-owner-shell-v1';
+const SHELL=['/admin.html','/admin.css','/admin.js','/style.css','/offline.html','/icons/ilker-192.svg','/icons/ilker-512.svg','/icons/ilker-maskable.svg','/icons/ilker-badge.svg','/assets/ilker-logo-temporary.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));});
-self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('ruslan-owner-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
+self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>(k.startsWith('ruslan-owner-shell-')||k.startsWith('ilker-owner-shell-'))&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
 self.addEventListener('fetch',event=>{
  const url=new URL(event.request.url);
  // Never cache API responses, credentials, booking contacts or non-GET requests.
@@ -19,9 +19,9 @@ self.addEventListener('push',event=>{
  // Payloads deliberately omit customer contacts, including on the device lock screen.
  const raw=typeof payload.url==='string'?payload.url:'/admin.html';
  let destination='/admin.html';try{const url=new URL(raw,self.location.origin);if(url.origin===self.location.origin&&url.pathname==='/admin.html')destination=url.pathname+url.search;}catch{}
- event.waitUntil(self.registration.showNotification(typeof payload.title==='string'?payload.title:'Ruslan True',{
+ event.waitUntil(self.registration.showNotification(typeof payload.title==='string'?payload.title:'İlker Sevim Barber Club',{
   body:typeof payload.body==='string'?payload.body:'Проверь новые записи в панели владельца.',
-  icon:'/icons/icon-192.png',badge:'/icons/badge-96.png',tag:typeof payload.tag==='string'?payload.tag:'ruslan-new-booking',
+  icon:'/icons/ilker-192.svg',badge:'/icons/ilker-badge.svg',tag:typeof payload.tag==='string'?payload.tag:'ilker-new-booking',
   data:{url:destination}
  }));
 });

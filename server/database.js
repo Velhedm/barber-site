@@ -22,7 +22,7 @@ async function createDatabase(options={}){
   if(filename!==':memory:')mkdirSync(path.dirname(filename),{recursive:true});
   const sqlite=new DatabaseSync(filename);
   sqlite.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
-  sqlite.exec(schema.replaceAll('EVENT_ID','INTEGER PRIMARY KEY')+'DROP TABLE IF EXISTS outbox;');
+  if(options.bootstrapLegacy!==false)sqlite.exec(schema.replaceAll('EVENT_ID','INTEGER PRIMARY KEY'));
   const execute=fn=>context.getStore()?Promise.resolve().then(fn):exclusive(fn);
   return {
    prepare(sql){return Object.fromEntries(['get','all','run'].map(method=>[method,(...args)=>execute(()=>sqlite.prepare(sql)[method](...args))]));},
@@ -40,7 +40,7 @@ async function createDatabase(options={}){
  types.setTypeParser(20,value=>Number(value));
  const pool=new Pool({connectionString:url,max:5,connectionTimeoutMillis:20000,idleTimeoutMillis:30000});
  pool.on('error',()=>console.error('Database connection interrupted'));
- try{await pool.query(schema.replaceAll('EVENT_ID','BIGSERIAL PRIMARY KEY'));}catch(e){await pool.end();throw e;}
+ try{if(options.bootstrapLegacy!==false)await pool.query(schema.replaceAll('EVENT_ID','BIGSERIAL PRIMARY KEY'));}catch(e){await pool.end();throw e;}
  const query=async(sql,args=[])=>{
   let index=0;const converted=sql.replaceAll('?',()=>'$'+(++index)).replaceAll('instr(name,$4)>0',"position($4 in name)>0").replaceAll('instr(phone,$5)>0',"position($5 in phone)>0");
   return (context.getStore()||pool).query(converted,args);

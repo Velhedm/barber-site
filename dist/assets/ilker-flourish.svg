@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 65" fill="none" role="img" aria-label="Decorative gold flourish">
+  <defs><linearGradient id="gold" x1="0" y1="0" x2="560" y2="0" gradientUnits="userSpaceOnUse"><stop stop-color="#7c643a"/><stop offset=".38" stop-color="#eddbab"/><stop offset=".7" stop-color="#c7a66e"/><stop offset="1" stop-color="#7b6237" stop-opacity=".3"/></linearGradient></defs>
+  <style>.stroke{stroke-dasharray:700;stroke-dashoffset:700;animation:draw 2.4s ease-out .2s forwards}@keyframes draw{to{stroke-dashoffset:0}}@media(prefers-reduced-motion:reduce){.stroke{animation:none;stroke-dashoffset:0}}</style>
+  <path class="stroke" d="M8 42C50 24 112 19 169 26c55 7 85 22 136 20 51-1 83-19 127-25 44-5 85 2 119 14M178 36c41 9 81 15 124 14 37 0 75-8 110-16" stroke="url(#gold)" stroke-width="1.8" stroke-linecap="round"/>
+</svg>
