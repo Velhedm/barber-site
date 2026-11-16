@@ -69,3 +69,12 @@ Reception can read individual visit prices and client spending for its daily wor
 cannot access aggregate finance routes, corrections, staff credentials, catalog edits,
 customer anonymization or audit exports. Final owner acceptance of this permission
 matrix is still required before provisioning real receptionist accounts.
+
+## PWA manifests
+
+The admin manifest retains its existing identity and start URL; its application
+scope is limited to `/admin.html`. The client has a separate manifest and identity.
+The service worker scope and Push subscriptions are unchanged. Verify the upgrade on
+an actual installed iPhone PWA: manifest-scope changes, opening the client externally,
+return to the admin and Push after the upgrade are not established by Chromium tests.
+The supplied logo remains temporary and icon redesign is still pending.

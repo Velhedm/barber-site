@@ -1,10 +1,10 @@
 {
   "id": "/owner",
   "name": "İlker Sevim Barber Club — панель владельца",
-  "short_name": "İlker Sevim",
+  "short_name": "İlker Admin",
   "lang": "ru",
   "start_url": "/admin.html?source=pwa",
-  "scope": "/",
+  "scope": "/admin.html",
   "display": "standalone",
   "display_override": [
     "standalone",

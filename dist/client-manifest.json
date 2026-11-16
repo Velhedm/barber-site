@@ -1,0 +1,17 @@
+{
+  "id": "/client-booking",
+  "name": "İlker Sevim Barber Club",
+  "short_name": "İlker Sevim",
+  "lang": "az",
+  "start_url": "/?source=client-pwa",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101110",
+  "theme_color": "#101110",
+  "description": "İlker Sevim Barber Club onlayn rezervasiya",
+  "icons": [
+    { "src": "/icons/ilker-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/ilker-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/ilker-maskable.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
