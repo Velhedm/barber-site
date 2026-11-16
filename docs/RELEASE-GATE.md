@@ -78,6 +78,8 @@ fingerprints matched the then-current production state in all eight tables.
 SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER privileges for the
 `ilker_service` role matched and a restricted SELECT succeeded. The rehearsal
 container and its temporary volume were removed afterwards; encrypted copies remain.
+Production metadata inspection separately found no role memberships and no RLS
+policies on the eight existing Ilker tables; application authorization is essential.
 
 This is a point-in-time local backup, not an independently stored backup or a tested
 full application recovery. Global role definitions, passwords, memberships, schema
