@@ -31,6 +31,7 @@ function createReminders(db,{now,provider,audit}){
   }
  }
  async function revoke(id){await db.prepare('UPDATE ilker_reminder_consent SET email=?,revoked_at=? WHERE booking_id=?').run('',now(),id);await db.prepare("UPDATE ilker_reminder_jobs SET state='cancelled' WHERE booking_id=? AND state='pending'").run(id);}
+ async function revokeByStaff(id,actor){if(typeof id!=='string'||!/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id))throw fail(400,'Invalid details');return db.transaction(async()=>{const row=await db.prepare('SELECT booking_id,revoked_at FROM ilker_reminder_consent WHERE booking_id=?').get(id);if(!row||row.revoked_at!==null)return {ok:true};await revoke(id);await audit(actor,'reminder_revoked','booking',id,{});return {ok:true};});}
  async function list(){return db.prepare("SELECT j.booking_id,j.offset_minutes,j.visit_start,j.state,j.attempts,j.sent_at,j.error FROM ilker_reminder_jobs j ORDER BY j.due DESC LIMIT 100").all();}
  async function drain(){if(draining||!provider?.configured)return;draining=true;try{for(let i=0;i<20;i++){
   const job=await db.transaction(async()=>{const config=await settings();if(!config.enabled)return null;const row=await db.prepare("SELECT j.*,c.email,c.language,b.date,b.time,b.status,c.revoked_at FROM ilker_reminder_jobs j JOIN ilker_reminder_consent c ON c.booking_id=j.booking_id JOIN ilker_appointments b ON b.id=j.booking_id WHERE j.state='pending' AND j.due<=? AND j.next_attempt<=? AND j.lease_expires<=? ORDER BY j.due LIMIT 1").get(now(),now(),now());if(!row)return null;
@@ -43,6 +44,6 @@ function createReminders(db,{now,provider,audit}){
    await provider.send({to:job.email,subject:content[0]+' · İlker Sevim',text:`${content[1]} ${job.date}, ${job.time} (Baku).`,id:'ilker-reminder-'+job.id});await db.transaction(async()=>{await db.prepare("UPDATE ilker_reminder_jobs SET state='sent',sent_at=?,lease_token=NULL,lease_expires=0 WHERE id=? AND lease_token=?").run(now(),job.id,job.lease);});}
   catch(error){await db.transaction(async()=>{await db.prepare("UPDATE ilker_reminder_jobs SET attempts=attempts+1,next_attempt=?,error=?,lease_token=NULL,lease_expires=0,state=CASE WHEN ?=1 OR attempts+1>=5 THEN 'failed' ELSE state END WHERE id=? AND lease_token=? AND state='pending'").run(now()+Math.min(3600000,30000*2**Math.min(job.attempts,7)),error.permanent?'rejected':'unavailable',Number(Boolean(error.permanent)),job.id,job.lease);});}
  }}finally{draining=false;}}
- return {settings,saveSettings,consent,schedule,revoke,list,drain};
+ return {settings,saveSettings,consent,schedule,revoke,revokeByStaff,list,drain};
 }
 module.exports={migrateReminders,createReminders};

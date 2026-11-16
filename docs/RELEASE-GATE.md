@@ -19,7 +19,7 @@ Render auto-deploys the former; pushing there would publish unfinished functiona
 5. Run full unit/API/browser/two-instance PostgreSQL tests, then real iPhone PWA/Push checks.
 6. Assign historical unassigned bookings through the stage-2 reschedule action before
    enabling new masters. Unassigned active intervals intentionally block all masters.
-7. Explicit migrations 1–8 (masters, reception/CRM/finance, accounts, Push leases, change events, ordering, email recovery and reminders): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
+7. Explicit migrations 1–10 (masters, reception/CRM/finance, accounts, Push leases, change events, ordering, email recovery, reminders, business settings and system alerts): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
    `node scripts/migrate-management.js --apply`. Then review/apply
    `migrations/management-grants.sql` with the database owner, never at app startup.
 8. Only when all release gates pass, deploy tested commit and enable `MANAGEMENT_ENABLED=true`.
@@ -101,7 +101,7 @@ scope is limited to `/admin.html`. The client has a separate manifest and identi
 The service worker scope and Push subscriptions are unchanged. Verify the upgrade on
 an actual installed iPhone PWA: manifest-scope changes, opening the client externally,
 return to the admin and Push after the upgrade are not established by Chromium tests.
-The supplied logo remains temporary and icon redesign is still pending.
+New icon assets use the supplied, approved temporary logo reconstruction.
 
 ## Client cancellation link
 
@@ -111,7 +111,7 @@ the URL fragment, never in a query string, and is only sent to the cancellation 
 in a JSON POST after the user presses the confirmation button. Opening the link cannot
 change a booking. Treat the link like a password; anyone possessing it can cancel.
 The customer must save the link, as no delivery provider is configured. It follows
-rescheduling and only permits cancellation before the latest start time. Repeated POSTs
+rescheduling and permits cancellation until the owner-defined cutoff before the latest start. Repeated POSTs
 are safe. No personal data is returned. Bookings made before this UI do not acquire a
 link automatically. The link must be saved; external delivery remains unconfigured.
 
@@ -122,7 +122,7 @@ changes. Each subscription receives a separately leased task; sensitive contacts
 excluded, and the recipient's language and privacy choice apply at delivery time. A
 later event for the same booking/device waits for an earlier event to be delivered.
 Provider responses can be lost, so exactly-once delivery cannot be guaranteed. System
-error alerts and real-device acceptance remain outstanding. The free server may sleep.
+error alerts are staged separately; real-device acceptance remains outstanding. The free server may sleep.
 
 ## Reminders and icons (staged)
 
@@ -130,3 +130,30 @@ Migration 8 adds opt-in email reminders, outbox leases, retries and owner settin
 No production email provider has been configured; real delivery and recipient consent
 require validation. See reports/REMINDERS-RU.md. PNG icon files were generated from
 the agreed temporary reconstruction; verify the updated installed PWA on a real iPhone.
+
+## Business settings (staged)
+
+Migration 9 initializes name and telephone from the current public page, preserves
+existing records, and defaults to online booking enabled / cancellation before start.
+Owners may change these values without restart; server checks apply transactionally
+to new public bookings and cancellation. Existing idempotent retries remain valid.
+Placeholder masters remain offline until configured; do not enable management without
+confirmed real schedules and a migration/assignment plan for historic bookings.
+
+## System-error Push (staged)
+
+Migration 10 adds per-device leased delivery of generic, localized system-error
+notifications. Events are deduplicated per 15-minute bucket. An outage while the
+database is unavailable is held in process memory and retried after connectivity
+returns; a process crash before persistence can lose it. Delivery remains at-least-once.
+No exception text, customer data or secrets are included in the notification.
+
+## Backup utility
+
+`scripts/backup-neon.sh` is a packaging helper requiring a PostgreSQL 18-compatible
+`pg_dump`, a direct connection configured privately via PGSERVICEFILE, and a separate
+passphrase file. It intentionally excludes ownership and ACLs, so it is NOT a complete
+production backup by itself. The helper has only had syntax and simulated failure/no-overwrite checks; the earlier test
+branch dump/restore was performed independently. Production roles, grants, external
+resources, independent key/backup storage and a production-derived restore rehearsal
+remain mandatory.

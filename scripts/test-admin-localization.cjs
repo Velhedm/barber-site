@@ -6,6 +6,8 @@ const {scryptSync}=require('node:crypto');
 (async()=>{
  const salt='1234567890abcdef1234567890abcdef';
  const runtime=await createApp({databaseUrl:'',databasePath:':memory:',management:true,migrateManagement:true,production:false,now:()=>Date.parse('2030-01-01T00:00:00Z'),adminHash:salt+':'+scryptSync('local-test-password-only',salt,64).toString('hex'),vapid:{}});
+ await runtime.shop.setDuration('haircut','zal',60);const master=(await runtime.shop.masters())[0];await runtime.shop.saveMaster({id:master.id,revision:master.revision,name:'',online:true,archived:false,stepMinutes:30,serviceIds:['haircut'],schedule:Array.from({length:7},()=>({closed:false,start:'09:00',end:'21:00',breaks:[]}))});
+ await runtime.shop.book({name:'Synthetic Client',phone:'+994500000118',date:'2030-01-02',time:'12:00',masterId:master.id,serviceIds:['haircut'],room:'zal',requestKey:require('node:crypto').randomUUID()});
  const server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
  let browser;
  try{

@@ -31,6 +31,11 @@ test('reusing a booking request key cannot silently change reminder consent',asy
  assert.equal((await book({requestKey,reminder:{consent:true,email:'synthetic@example.invalid',language:'en'}})).id,first.id);
  await assert.rejects(book({requestKey,reminder:{consent:true,email:'other@example.invalid',language:'en'}}),{status:409});
 });
+test('staff can revoke reminder consent without cancelling the visit',async t=>{
+ const {r,book}=await setup(t);const settings=await r.reminders.settings();await r.reminders.saveSettings({revision:settings.revision,enabled:true,offsets:[120]},'owner');
+ const row=await book({reminder:{consent:true,email:'synthetic@example.invalid',language:'en'}});assert.equal((await r.shop.getBooking(row.id)).reminder_opt_in,1);
+ await r.reminders.revokeByStaff(row.id,'owner');assert.equal((await r.shop.getBooking(row.id)).reminder_opt_in,0);assert.equal((await r.shop.getBooking(row.id)).status,'active');assert.equal((await r.reminders.list())[0].state,'cancelled');assert.equal((await r.db.prepare('SELECT email FROM ilker_reminder_consent WHERE booking_id=?').get(row.id)).email,'');
+});
 test('if a cancellation races an accepted message, history reports it as sent',async t=>{
  let clock=Date.parse('2030-01-01T00:00:00Z'),entered,release;const waiting=new Promise(r=>entered=r),blocked=new Promise(r=>release=r);
  const r=await createApp({databaseUrl:'',databasePath:':memory:',management:true,migrateManagement:true,production:false,vapid:{},adminHash:await hashPassword('synthetic-owner-password'),now:()=>clock,emailProvider:{configured:true,send:async()=>{entered();await blocked;}}});t.after(()=>r.close());

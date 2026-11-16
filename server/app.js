@@ -21,6 +21,8 @@ const {migrateRecovery}=require('./recovery-migration');
 const {createRecoveryStore}=require('./recovery-store');
 const {createEmailProvider}=require('./email-provider');
 const {migrateReminders,createReminders}=require('./reminders');
+const {migrateBusinessSettings,createBusinessSettings}=require('./business-settings');
+const {migrateSystemAlerts,createSystemAlerts}=require('./system-alerts');
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 function verifyPassword(password,hash){try{const [salt,key]=hash.split(':');const expected=Buffer.from(key,'hex');const actual=scryptSync(password,salt,64);return expected.length===actual.length&&timingSafeEqual(expected,actual);}catch{return false;}}
@@ -56,7 +58,7 @@ async function createApp(options={}){
 
  const management=options.management??(process.env.MANAGEMENT_ENABLED==='true');
  const changes=createPushChanges(db,{now,send:pushSend});
- let reception=null,reminders=null;
+ let reception=null,reminders=null,business=null,systemAlerts=null;
  const onBooked=async (bookingId,context)=>{
   if(reception)await reception.linkCreated(bookingId,context);
   if(reminders)await reminders.consent(bookingId,context.reminder);
@@ -86,6 +88,12 @@ async function createApp(options={}){
   if(options.migrateManagement&&!options.preMigrated)await migrateReminders(db);
   if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=8').get())throw new Error('Reminder migration required');
   reminders=createReminders(db,{now,provider,audit:shop.audit});
+  if(options.migrateManagement&&!options.preMigrated)await migrateBusinessSettings(db);
+  if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=9').get())throw new Error('Business settings migration required');
+  business=createBusinessSettings(db,{audit:shop.audit});
+  if(options.migrateManagement&&!options.preMigrated)await migrateSystemAlerts(db);
+  if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=10').get())throw new Error('System alerts migration required');
+  systemAlerts=createSystemAlerts(db,{now,send:pushSend});
  }
  const hours=Array.from({length:12},(_,i)=>String(9+i).padStart(2,'0')+':00');
  const horizon=365;
@@ -106,12 +114,16 @@ async function createApp(options={}){
  }next();});
  const limiter=(limit,windowMs=60000)=>rateLimit({windowMs,limit,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Слишком много запросов. Попробуй позже.'}});
  app.use('/api',limiter(180));
+ // Separate limit for bulk personal-data reads. This is per process/IP and
+ // does not replace distributed abuse monitoring or account-level controls.
+ const bulkReadLimit=limiter(80);
+ app.use(['/api/admin/bookings','/api/admin/clients','/api/admin/master-history'],(req,res,next)=>req.method==='GET'?bulkReadLimit(req,res,next):next());
  app.get('/healthz',async(req,res)=>{(await db.prepare('SELECT 1').get());res.json({ok:true});});
  app.get('/api/meta',async(req,res)=>{
   const rows=await shop.settings();const durations=Object.fromEntries(rows.map(row=>[row.id,row.duration_minutes]));
   const services=management?await shop.services():catalog.categories.flatMap(group=>group.services.map(item=>({id:item.id,name:item.name,translations:item.translations,group:group.id,groupName:group.name,groupTranslations:group.translations,prices:{zal:item.zal,vip:item.vip},durations:{zal:durations[item.id+':zal'],vip:durations[item.id+':vip']},zalNote:item.zal_note||null})));
   const reminderConfig=management?await reminders.settings():null;
-  res.json({management,brand:catalog.brand,serverTime:now(),timezone:'Asia/Baku',hours,services,notificationsEnabled:pushEnabled,remindersEnabled:Boolean(reminderConfig?.enabled&&reminderConfig.providerConfigured),maxDaysAhead:horizon});
+  res.json({management,brand:catalog.brand,business:business?await business.get():null,serverTime:now(),timezone:'Asia/Baku',hours,services,notificationsEnabled:pushEnabled,remindersEnabled:Boolean(reminderConfig?.enabled&&reminderConfig.providerConfigured),maxDaysAhead:horizon});
  });
  app.get('/api/availability',async(req,res)=>{
   const ids=typeof req.query.serviceIds==='string'?req.query.serviceIds.split(','):undefined;
@@ -123,7 +135,7 @@ async function createApp(options={}){
  if(management)app.post('/api/bookings/cancel',limiter(6,10*60000),async(req,res)=>res.json(await shop.cancelByClient(req.body.id,req.body.token)));
  const receptionRoutes=new Set([
   'GET /api/admin/session','POST /api/admin/logout','GET /api/admin/day','POST /api/admin/day','POST /api/admin/slot',
-  'POST /api/admin/availability','POST /api/admin/bookings/create','POST /api/admin/bookings/reschedule','POST /api/admin/bookings/status','POST /api/admin/bookings/comment',
+  'POST /api/admin/availability','POST /api/admin/bookings/create','POST /api/admin/bookings/reschedule','POST /api/admin/bookings/status','POST /api/admin/bookings/comment','POST /api/admin/bookings/reminders/revoke',
   'GET /api/admin/dashboard','GET /api/admin/clients','POST /api/admin/clients/save','GET /api/admin/management',
   'POST /api/admin/master-exception','POST /api/admin/master-block','GET /api/admin/master-day','POST /api/admin/cancel',
   'GET /api/admin/services','POST /api/admin/price','POST /api/admin/complete','GET /api/admin/bookings',
@@ -173,6 +185,9 @@ async function createApp(options={}){
   app.get('/api/admin/audit',auth,limiter(20),async(req,res)=>res.json({rows:await access.events(req.user.id,req.query.offset)}));
   app.get('/api/admin/reminders',auth,async(req,res)=>res.json({settings:await reminders.settings(),jobs:await reminders.list()}));
   app.post('/api/admin/reminders',auth,async(req,res)=>res.json(await reminders.saveSettings(req.body,req.user.id)));
+  app.post('/api/admin/bookings/reminders/revoke',auth,async(req,res)=>res.json(await reminders.revokeByStaff(req.body.id,req.user.id)));
+  app.get('/api/admin/business',auth,async(req,res)=>res.json(await business.get()));
+  app.post('/api/admin/business',auth,async(req,res)=>res.json(await business.save(req.body,req.user.id)));
  }
  app.get('/api/admin/day',auth,async(req,res)=>{
   if(!validDate(req.query.date))return res.status(400).json({error:'Некорректная дата'});
@@ -286,14 +301,14 @@ async function createApp(options={}){
     const attempts=job.attempts+1;await finish(()=>db.prepare('UPDATE push_deliveries SET attempts=?,next_attempt=?,last_error=? WHERE id=?').run(attempts,now()+Math.min(3600000,10000*2**Math.min(attempts,8)),'push_unavailable',job.delivery_id));
    }finally{if(management)await db.prepare('DELETE FROM ilker_push_leases WHERE delivery_id=? AND token=?').run(job.delivery_id,job.lease);}
   }
-  if(management)await changes.drain();
+  if(management){await changes.drain();await systemAlerts.drain();}
  }finally{draining=false;}}
  // Always revalidate the worker and private UI. APIs and private records never enter a Service Worker cache.
  app.get('/sw.js',async(req,res)=>{res.set({'Cache-Control':'no-cache','Service-Worker-Allowed':'/'}).sendFile(path.join(__dirname,'../dist/sw.js'));});
  app.use(['/admin.html','/admin.js','/admin.css'],async(req,res,next)=>{res.set('Cache-Control','no-store');next();});
  app.get('/presentation{/:rest}',async(req,res)=>res.redirect('/'+(req.path.endsWith('/')?'':'')));
  app.use(express.static(path.join(__dirname,'../dist'),{index:'index.html'}));
- app.use((error,req,res,next)=>{if(error.status===400&&error.type==='entity.parse.failed')return res.status(400).json({error:'Некорректный JSON'});res.status(error.status||500).json({error:error.status?error.message:'Ошибка сервера. Повтори запрос с теми же данными.'});});
- return {app,db,shop,access,recovery,reminders,drainOutbox,drainEmail:async()=>{await recovery?.drain();await reminders?.drain();},close:()=>db.close()};
+ app.use((error,req,res,next)=>{if(error.status===400&&error.type==='entity.parse.failed')return res.status(400).json({error:'Некорректный JSON'});if(!error.status||(error.status>=500&&error.status!==503))systemAlerts?.flag();res.status(error.status||500).json({error:error.status&&error.status<500?error.message:'Ошибка сервера. Повтори запрос с теми же данными.'});});
+ return {app,db,shop,access,recovery,reminders,systemAlerts,drainOutbox,drainEmail:async()=>{await recovery?.drain();await reminders?.drain();},close:()=>db.close()};
 }
 module.exports={createApp,verifyPassword};

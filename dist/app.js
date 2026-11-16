@@ -7,9 +7,10 @@
   const {t}=window.RTI18n;
   function setMessage(element,key){element.dataset.messageKey=key;element.textContent=t(key);}
   let latestConfirmation=null;
-  const state = {management:false, masters:[], masterId:'', ready:false, submitting:false, confirmed:false, uncertain:false, online:navigator.onLine, offset:0, maxDays:365, hours:[], services:[], selectedIds:null, room:'zal', date:'', time:'', month:'', availability:null, loading:false, requestKey:crypto.randomUUID(), payload:''};
+  const state = {management:false, bookingOpen:true, business:null, masters:[], masterId:'', ready:false, submitting:false, confirmed:false, uncertain:false, online:navigator.onLine, offset:0, maxDays:365, hours:[], services:[], selectedIds:null, room:'zal', date:'', time:'', month:'', availability:null, loading:false, requestKey:crypto.randomUUID(), payload:''};
   let availabilityRequest = null;
   let loadSequence = 0, masterSequence = 0;
+  function applyBusiness(){if(!state.business)return;const b=state.business;const policy=$('#cancellation-policy');policy.hidden=false;policy.textContent=b.cancel_minutes?t('Отмена не позднее чем за {minutes} минут').replace('{minutes}',String(b.cancel_minutes)):t('Отмена до начала визита');window.RTI18n.setBusiness(b.name,b.phone);for(const node of document.querySelectorAll('a[href^=\"https://wa.me/\"]'))node.href='https://wa.me/'+b.phone.replace(/\D/g,'');for(const node of document.querySelectorAll('[data-business-name]'))node.textContent=b.name;for(const node of document.querySelectorAll('a[href^=\"tel:\"]')){node.href='tel:'+b.phone.replace(/[^+\d]/g,'');if(node.matches('.contact-link,.location-contact a')){const span=node.querySelector('span');if(span)span.textContent=b.phone;else node.textContent=b.phone;}}}
   function masterName(master){return master?.name || `${t('Мастер')} ${master?.position || ''}`;}
   function renderMasters(){
     $('#master-field').hidden=!state.management;$('#summary-master-row').hidden=!state.management;
@@ -66,9 +67,9 @@
     setMessage($('#summary-time'),state.time?`${state.time}–${endTime(state.time)}`:'Не выбрано');
     setMessage($('#service-description'),items.some(x=>x.id==='kids_haircut')&&state.room==='zal'?'До 12 лет — только для обычного зала.':items.some(x=>typeof x.prices?.[state.room]==='object')?'Итоговая стоимость определяется отдельно.':'');
     renderRoom();renderMasters();updateDuration();
-    $('#confirm-booking').disabled=!state.ready||!state.online||state.submitting||!state.time||!state.selectedIds?.length||(state.management&&!state.masterId)||(!state.uncertain&&!free(state.time));
+    $('#confirm-booking').disabled=(!state.bookingOpen&&!state.uncertain)||!state.ready||!state.online||state.submitting||!state.time||!state.selectedIds?.length||(state.management&&!state.masterId)||(!state.uncertain&&!free(state.time));
     setMessage($('#submit-label'),state.submitting?'Подтверждаем…':state.uncertain?'Проверить запись':'Подтвердить запись');
-    setMessage($('#submit-hint'),state.uncertain?'Нажми, чтобы получить результат отправленной записи':!state.online?'Нет соединения с интернетом':!state.ready?'Загружаем расписание…':!state.date?'Выбери дату визита':!state.time?'Выбери свободное время':`${label(state.date)} · ${state.time}–${endTime(state.time)} · ${t('Баку')}`);
+    setMessage($('#submit-hint'),state.uncertain?'Нажми, чтобы получить результат отправленной записи':!state.bookingOpen?'Запись временно закрыта':!state.online?'Нет соединения с интернетом':!state.ready?'Загружаем расписание…':!state.date?'Выбери дату визита':!state.time?'Выбери свободное время':`${label(state.date)} · ${state.time}–${endTime(state.time)} · ${t('Баку')}`);
   }
   function renderCalendar(focusDate) {
     const [year,month]=state.month.split('-').map(Number);
@@ -133,7 +134,7 @@
   async function initialize(){
     $('#retry-load').disabled=true;
     try{
-      const meta=await api('/api/meta');if(meta.brand!=='İlker Sevim Barber Club')throw new Error('Brand catalog is not ready');state.management=Boolean(meta.management);$('#reminder-fields').hidden=!meta.remindersEnabled;state.offset=meta.serverTime-Date.now();state.hours=meta.hours;state.services=meta.services;state.selectedIds=meta.services.length?[meta.services[0].id]:[];state.maxDays=meta.maxDaysAhead;state.ready=true;
+      const meta=await api('/api/meta');if(meta.brand!=='İlker Sevim Barber Club')throw new Error('Brand catalog is not ready');state.management=Boolean(meta.management);state.business=meta.business;state.bookingOpen=meta.business?.online!==false;applyBusiness();$('#reminder-fields').hidden=!meta.remindersEnabled;state.offset=meta.serverTime-Date.now();state.hours=meta.hours;state.services=meta.services;state.selectedIds=meta.services.length?[meta.services[0].id]:[];state.maxDays=meta.maxDaysAhead;state.ready=true;
       renderServices();await refreshMasters();$('#service').disabled=false;
       $('#load-error').hidden=true;state.month=localDay().slice(0,7);selectDate(localDay());
     }catch{
@@ -186,7 +187,7 @@
     if(state.ready)renderServices();
     renderCalendar();if(state.availability&&!state.loading)renderSlots();
     if(state.date)$('#chosen-date').textContent=label(state.date,{weekday:'short',day:'numeric',month:'long'});
-    updateSummary();renderConfirmation();if(state.ready&&!state.selectedIds?.length)setMessage($('#slots-status'),serviceText('empty'));
+    applyBusiness();updateSummary();renderConfirmation();if(state.ready&&!state.selectedIds?.length)setMessage($('#slots-status'),serviceText('empty'));
     for(const input of [$('#customer-name'),$('#customer-phone')])input.setCustomValidity('');
   });
   for(const input of [$('#customer-name'),$('#customer-phone')]){

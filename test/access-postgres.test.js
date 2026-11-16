@@ -7,7 +7,7 @@ test('PostgreSQL access: atomic credential import, shared sessions/revocation, r
  try{
   await control.exec('CREATE SCHEMA '+schema);parsed.searchParams.set('options','-c search_path='+schema);
   let clock=Date.parse('2030-01-01T00:00:00Z');const password='postgres-synthetic-owner',adminHash=await hashPassword(password),now=()=>clock;
-  const emails=[];const start=async first=>{const r=await createApp({...config,databaseUrl:parsed.href,management:true,migrateManagement:first,preMigrated:!first,production:false,adminHash,now,vapid:{},origin:'https://synthetic.invalid',recoveryKey:'a'.repeat(64),emailProvider:{configured:true,send:async mail=>emails.push(mail)}});runtimes.push(r);return r;};
+  const emails=[],pushes=[],keys=require('web-push').generateVAPIDKeys();const start=async first=>{const r=await createApp({...config,databaseUrl:parsed.href,management:true,migrateManagement:first,preMigrated:!first,production:false,adminHash,now,vapid:{subject:'mailto:synthetic@example.invalid',publicKey:keys.publicKey,privateKey:keys.privateKey},pushSend:async(sub,payload)=>pushes.push(JSON.parse(payload)),origin:'https://synthetic.invalid',recoveryKey:'a'.repeat(64),emailProvider:{configured:true,send:async mail=>emails.push(mail)}});runtimes.push(r);return r;};
   const a=await start(true),[b,c]=await Promise.all([start(false),start(false)]);assert.equal((await a.access.users('owner')).length,1);
   const owner=await a.access.login({password},'owner-ip','iPhone Safari');assert.equal((await b.access.session(owner.raw)).user.id,'owner');
   await Promise.all([b.access.language('owner','az'),c.access.preferences('owner',{pushPrivate:false})]);const preferences=(await a.access.users('owner'))[0];assert.equal(preferences.language,'az');assert.equal(preferences.push_private,0);
@@ -32,5 +32,6 @@ test('PostgreSQL access: atomic credential import, shared sessions/revocation, r
   const reminderConfig=await a.reminders.settings();await a.reminders.saveSettings({revision:reminderConfig.revision,enabled:true,offsets:[120]},'owner');
   await b.shop.book({name:'Synthetic client',phone:'+994500000113',date:'2030-01-02',time:'12:00',masterId:master.id,serviceIds:['haircut'],room:'zal',requestKey:randomUUID(),reminder:{consent:true,email:'client@example.invalid',language:'en'}});
   clock=Date.parse('2030-01-02T06:00:01Z');await Promise.all([a.drainEmail(),b.drainEmail(),c.drainEmail()]);assert.equal(emails.length,3);assert.equal((await a.reminders.list()).filter(row=>row.state==='sent').length,1);
+  const subscription={endpoint:'https://fcm.googleapis.com/synthetic-postgres-alert',keys:{p256dh:'A'.repeat(87),auth:'A'.repeat(22)}};await a.access.subscribe('owner',subscription,null);a.systemAlerts.flag();b.systemAlerts.flag();c.systemAlerts.flag();await Promise.all([a.drainOutbox(),b.drainOutbox(),c.drainOutbox()]);assert.equal(pushes.filter(p=>p.tag.startsWith('system-')).length,1);
  }finally{await Promise.all(runtimes.map(r=>r.close()));await control.exec('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await control.close();}
 });

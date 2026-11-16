@@ -55,6 +55,15 @@
  catalog['За сколько минут до визита (через запятую)']={ru:'За сколько минут до визита (через запятую)',az:'Ziyarətdən neçə dəqiqə əvvəl (vergüllə ayırın)',en:'Minutes before visit (comma-separated)'};
  catalog['Invalid reminder settings']={ru:'Проверьте настройки напоминаний: от 1 до 5 разных значений, каждое от 5 до 10080 минут.',az:'Xatırlatma ayarlarını yoxlayın: 5–10080 dəqiqə arasında 1–5 fərqli dəyər daxil edin.',en:'Check reminder settings: enter 1–5 distinct values from 5 to 10080 minutes.'};
  catalog['Email provider not configured']={ru:'Почтовый сервис не настроен.',az:'Poçt xidməti qurulmayıb.',en:'The email provider is not configured.'};
+ catalog['Данные салона']={ru:'Данные салона',az:'Salon məlumatları',en:'Salon details'};
+ catalog['Название салона']={ru:'Название салона',az:'Salonun adı',en:'Salon name'};
+ catalog['Основной телефон']={ru:'Основной телефон',az:'Əsas telefon',en:'Main phone'};
+ catalog['Онлайн-запись открыта']={ru:'Онлайн-запись открыта',az:'Onlayn rezervasiya açıqdır',en:'Online booking is open'};
+ catalog['Отмена не позже чем за минут']={ru:'Отмена не позже чем за минут',az:'Ləğv ziyarətdən neçə dəqiqə əvvəl',en:'Cancellation cutoff in minutes'};
+ catalog['Сохранить данные салона']={ru:'Сохранить данные салона',az:'Salon məlumatlarını saxla',en:'Save salon details'};
+ catalog['Invalid business settings']={ru:'Проверьте название, телефон и срок отмены.',az:'Adı, telefonu və ləğv müddətini yoxlayın.',en:'Check the name, phone and cancellation cutoff.'};
+ catalog['Отключить напоминания']={ru:'Отключить напоминания',az:'Xatırlatmaları söndür',en:'Disable reminders'};
+ catalog['Отключить напоминания для этой записи? Адрес Email будет удалён.']={ru:'Отключить напоминания для этой записи? Адрес Email будет удалён.',az:'Bu rezervasiya üçün xatırlatmalar söndürülsün? Email ünvanı silinəcək.',en:'Disable reminders for this booking? The email address will be removed.'};
  let language='ru';try{const saved=localStorage.getItem('ilkersevim.admin.language');if(['ru','az','en'].includes(saved))language=saved;}catch{}
  const $=s=>document.querySelector(s);
  const bindings=new Set(),boundNodes=new WeakMap();

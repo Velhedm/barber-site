@@ -21,11 +21,11 @@ async function createReceptionStore(db,base,{now=()=>Date.now(),onChange=async()
   const row=await db.prepare('SELECT name,phone FROM ilker_appointments WHERE id=?').get(id),client=await clientFor(row.name,row.phone);
   await db.prepare('INSERT INTO ilker_visit_state(booking_id,client_id,source) VALUES(?,?,?)').run(id,client.id,internal?'reception':'online');
  }
- const joins=`FROM ilker_appointments b LEFT JOIN ilker_booking_assignment a ON a.booking_id=b.id
-  LEFT JOIN ilker_visit_state v ON v.booking_id=b.id LEFT JOIN ilker_clients c ON c.id=v.client_id
+ const joins=`FROM ilker_appointments b LEFT JOIN ilker_booking_assignment a ON a.booking_id=b.id LEFT JOIN ilker_masters m ON m.id=a.master_id
+  LEFT JOIN ilker_visit_state v ON v.booking_id=b.id LEFT JOIN ilker_clients c ON c.id=v.client_id LEFT JOIN ilker_reminder_consent rc ON rc.booking_id=b.id
   LEFT JOIN (SELECT booking_id,SUM(amount) AS paid FROM ilker_finance_entries GROUP BY booking_id) f ON f.booking_id=b.id`;
  const columns=`b.id,b.date,b.time,b.kind,b.status,b.name,b.phone,b.service_id,b.room,b.service_name,b.price_min,b.price_max,b.actual_price,b.duration_minutes,b.sessions_count,b.created_at,
-  a.master_id,a.master_name,a.room_id,a.room_name,v.revision,v.client_id,v.notes,v.source,c.anonymized,
+  a.master_id,a.master_name,a.room_id,a.room_name,m.name AS current_master_name,m.position AS master_position,v.revision,v.client_id,v.notes,v.source,c.anonymized,CASE WHEN rc.booking_id IS NOT NULL AND rc.revoked_at IS NULL THEN 1 ELSE 0 END AS reminder_opt_in,
   COALESCE(f.paid,0) AS paid_minor,CASE WHEN EXISTS(SELECT 1 FROM ilker_booking_archive ba WHERE ba.booking_id=b.id) THEN 1 ELSE 0 END AS archived`;
  async function hydrate(rows){const map=await base.itemsFor(rows.map(r=>r.id));return rows.map(row=>({...row,archived:Boolean(row.archived),anonymized:Boolean(row.anonymized),items:map.get(row.id)||[]}));}
  async function getBooking(id){const row=await db.prepare(`SELECT ${columns} ${joins} WHERE b.id=? AND b.kind='booking'`).get(id);if(!row)throw failure(404,'Booking not found');return (await hydrate([row]))[0];}
@@ -112,7 +112,8 @@ async function createReceptionStore(db,base,{now=()=>Date.now(),onChange=async()
    const row=await db.prepare("SELECT id,date,time,status FROM ilker_appointments WHERE id=? AND request_key=? AND kind='booking'").get(id,token);
    if(!row)throw failure(404,'Cancellation link unavailable');
    if(row.status==='cancelled')return {ok:true};
-   if(row.status!=='active'||Date.parse(`${row.date}T${row.time}:00+04:00`)<=now())throw failure(409,'Cancellation unavailable');
+   const policy=await db.prepare('SELECT cancel_minutes FROM ilker_business_settings WHERE id=1').get();
+   if(row.status!=='active'||Date.parse(`${row.date}T${row.time}:00+04:00`)-policy.cancel_minutes*60000<=now())throw failure(409,'Cancellation unavailable');
    await db.prepare("UPDATE ilker_appointments SET status='cancelled' WHERE id=?").run(id);
    await bump(id);
    await onChange(id,'cancelled');

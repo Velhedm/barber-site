@@ -22,8 +22,8 @@ async function employee(runtime,login='reception1'){
 }
 test('reception server permissions, CSRF, actor attribution and private account data',async t=>{
  const {runtime,request,owner}=await setup(t);const {user,session}=await employee(runtime);
- for(const route of ['users','audit','finance','revenue','finance/history/id','master-history'])assert.equal((await request(route,undefined,session)).status,403,route);
- for(const route of ['users','masters','rooms','catalog','duration','clients/anonymize','finance/adjust','delete'])assert.equal((await request(route,{},session)).status,403,route);
+ for(const route of ['users','audit','finance','revenue','finance/history/id','master-history','business','reminders'])assert.equal((await request(route,undefined,session)).status,403,route);
+ for(const route of ['users','masters','rooms','catalog','duration','clients/anonymize','finance/adjust','delete','business','reminders'])assert.equal((await request(route,{},session)).status,403,route);
  for(const route of ['account','account/sessions','dashboard','clients','management','bookings','services','push/config'])assert.equal((await request(route,undefined,session)).status,200,route);
  assert.equal((await request('dashboard',undefined,session)).body.revenueMinor,undefined);
  for(const route of ['account/password','account/preferences','account/language','account/revoke','account/recovery','users']){
@@ -99,4 +99,10 @@ test('current-password proofs have a durable separate attempt limit',async t=>{
  for(let i=0;i<5;i++)await assert.rejects(runtime.access.changePassword('owner',{currentPassword:'wrong',newPassword:'synthetic-updated-password'}),{status:403});
  await assert.rejects(runtime.access.changePassword('owner',{currentPassword:password,newPassword:'synthetic-updated-password'}),{status:429});
  advance(900001);assert.equal((await runtime.access.changePassword('owner',{currentPassword:password,newPassword:'synthetic-updated-password'})).ok,true);
+});
+test('bulk personal-data reads are rate limited without affecting write endpoints',async t=>{
+ const {request,owner}=await setup(t);
+ for(let i=0;i<80;i++)assert.equal((await request('bookings',undefined,owner)).status,200);
+ assert.equal((await request('bookings',undefined,owner)).status,429);
+ const result=await request('clients/save',{name:'Synthetic client',phone:'+994500000128',requestKey:randomUUID()},owner);assert.equal(result.status,200);
 });

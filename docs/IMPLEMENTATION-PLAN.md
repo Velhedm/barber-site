@@ -87,3 +87,19 @@ Migration 8 adds opt-in reminder delivery with settings, retries and anonymizati
 No provider credentials or owner email were invented; real delivery requires setup.
 New PNG icon assets replace the temporary round icon for installed applications.
 Real-device acceptance, production backup and remaining business settings still block release.
+
+## Business settings and security update
+
+Migration 9 adds owner-controlled business name, phone, online-booking switch and
+online-cancellation cutoff; existing record snapshots remain unchanged. Scheduling,
+rooms, services and reminder intervals are configured separately. The new
+management mode still needs real master assignments, final backup and iPhone checks.
+See `reports/SECURITY-STAGED-RU.md` for verified controls and residual risks.
+
+## System-error alerts and manuals
+
+Migration 10 adds generic, localized Push alerts for internal server faults, with
+shared delivery leases and retry. Database outages are buffered only in process memory
+until access recovers. A crash may lose an unpersisted alert. See `RELEASE-GATE.md`.
+Owner/reception instructions, a staged security report and a factual Turkish PDF were
+prepared; they explicitly identify items not yet verified in production.

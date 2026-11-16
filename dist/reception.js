@@ -9,10 +9,11 @@ window.IlkerReception=(()=>{
  const bind=(node,render)=>window.IlkerAdminI18n.bind(node,render);
  const reasons={opening_balance:'Историческая оплата',completion:'Завершение визита',discount:'Скидка',refund:'Возврат',correction:'Исправление'};
  const masterName=m=>m.name||translate('Мастер {number}',{number:m.position});
+ const bookingMaster=row=>!row.current_master_name&&row.master_position&&row.master_name===`Мастер ${row.master_position}`?translate('Мастер {number}',{number:row.master_position}):(row.master_name||translate('Без мастера'));
  function el(tag,text,className){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(className)e.className=className;return e;}
  function field(label,type='text',value=''){const root=el('label',label),input=el(type==='textarea'?'textarea':'input');if(type!=='textarea')input.type=type;input.value=value??'';input.maxLength=type==='textarea'?1000:100;input.setAttribute('aria-label',label);root.append(input);window.IlkerAdminI18n?.bind(root,label);window.IlkerAdminI18n?.bind(input,label,'aria-label');return {root,input};}
  function select(label,options,value=''){const root=el('label',label),input=el('select');options.forEach(([id,name])=>{const option=new Option(name,id);if(label==='Период'||(label==='Мастер'&&id==='')||label==='Причина')window.IlkerAdminI18n?.bind(option,name);if(label==='Мастер'&&id){const m=model?.masters.find(m=>m.id===id);if(m)bind(option,()=>masterName(m));}input.append(option);});input.value=value;input.setAttribute('aria-label',label);root.append(input);window.IlkerAdminI18n?.bind(root,label);window.IlkerAdminI18n?.bind(input,label,'aria-label');return {root,input};}
- const staticButtons=new Set(['Перенести / изменить услуги','Итоговая цена','Комментарий','Оплата и корректировки','История клиента','В архив','Найти','+ Клиент','+ Запись','+ Новая запись','История','Редактировать','Записать','Назад','Следующие 50','Обезличить клиента','Показать','День','Неделя','Месяц','Запись','Клиент пришёл','Завершён','Отменён','Неявка']);
+ const staticButtons=new Set(['Отключить напоминания','Перенести / изменить услуги','Итоговая цена','Комментарий','Оплата и корректировки','История клиента','В архив','Найти','+ Клиент','+ Запись','+ Новая запись','История','Редактировать','Записать','Назад','Следующие 50','Обезличить клиента','Показать','День','Неделя','Месяц','Запись','Клиент пришёл','Завершён','Отменён','Неявка']);
  function button(label,fn,primary=false){const e=el('button',label,primary?'button primary':'text-button');if(staticButtons.has(label))window.IlkerAdminI18n?.bind(e,label);e.type='button';e.addEventListener('click',async()=>{e.disabled=true;try{await fn();}catch(error){fail(error);}finally{e.disabled=false;}});return e;}
  function note(text){return bind(el('p',text,'small-note'),text);}
  async function catalog(){model=await api('/api/admin/management');return model;}
@@ -63,6 +64,7 @@ window.IlkerReception=(()=>{
   },async()=>{await refresh();});save.dataset.labelKey=existing?'Сохранить изменения':'Создать запись';save.textContent=tr(save.dataset.labelKey);
  }
  function actions(row,root){
+  if(row.reminder_opt_in)root.append(button('Отключить напоминания',async()=>{if(!confirm(translate('Отключить напоминания для этой записи? Адрес Email будет удалён.')))return;await api('/api/admin/bookings/reminders/revoke',{id:row.id});await refresh();}));
   if(['active','arrived'].includes(row.status)&&!row.archived)root.append(button('Перенести / изменить услуги',()=>editor(row)));
   for(const status of row.status==='active'?['arrived','no_show','completed','cancelled']:row.status==='arrived'?['completed','cancelled']:row.status==='completed'?['cancelled']:[]){
    const payload={id:row.id,revision:row.revision,status,requestKey:crypto.randomUUID()};
@@ -87,7 +89,7 @@ window.IlkerReception=(()=>{
   if(signature!==JSON.stringify({period:rangeFor($('#calendar-date').value,$('#calendar-mode').value),masterId:$('#calendar-master').value,offset:rangeOffset}))return;
   const content=$('#calendar-content');content.replaceChildren(note(`${period.from} — ${period.to} · ${translate('Визитов')}: ${data.count}`));if(data.count>50)content.append(note(translate('Показаны {from}–{to} из {count}. Остальные записи — на следующих страницах.',{from:rangeOffset+1,to:rangeOffset+data.rows.length,count:data.count})));
   const days=[];for(let d=period.from;d<=period.to;d=shift(d,1))days.push(d);const grid=el('div',undefined,'reception-calendar');grid.dataset.mode=$('#calendar-mode').value;
-  for(const day of days){const cell=el('section',undefined,'reception-calendar-day');cell.append(el('h3',new Intl.DateTimeFormat(window.IlkerAdminI18n?.language||'ru',{day:'numeric',month:'short',weekday:'short',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'))));for(const row of [...data.rows].filter(r=>r.date===day).sort((a,b)=>a.time.localeCompare(b.time))){const item=button(`${row.time} · ${row.name} · ${row.master_name||translate('Без мастера')} · ${translate(names[row.status])}`,()=>openBooking(row.id));item.className='reception-calendar-visit';item.dataset.status=row.status;cell.append(item);}grid.append(cell);}content.append(grid,pager(rangeOffset,data.count,n=>{rangeOffset=n;return calendar();}));
+  for(const day of days){const cell=el('section',undefined,'reception-calendar-day');cell.append(el('h3',new Intl.DateTimeFormat(window.IlkerAdminI18n?.language||'ru',{day:'numeric',month:'short',weekday:'short',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'))));for(const row of [...data.rows].filter(r=>r.date===day).sort((a,b)=>a.time.localeCompare(b.time))){const item=button(`${row.time} · ${row.name} · ${bookingMaster(row)} · ${translate(names[row.status])}`,()=>openBooking(row.id));item.className='reception-calendar-visit';item.dataset.status=row.status;cell.append(item);}grid.append(cell);}content.append(grid,pager(rangeOffset,data.count,n=>{rangeOffset=n;return calendar();}));
  }
  function pager(current,count,change){const root=el('div',undefined,'pagination');if(current)root.append(button('Назад',()=>change(Math.max(0,current-50))));if(current+50<count)root.append(button('Следующие 50',()=>change(current+50)));return root;}
  async function openBooking(id){const row=await api('/api/admin/booking/'+encodeURIComponent(id)),view=dialog('Запись клиента');view.form.append(renderCard(row));}
@@ -111,5 +113,5 @@ window.IlkerReception=(()=>{
  }
  async function init(request,onError,card,reload,offset){serverOffset=offset;api=request;fail=e=>onError(Object.assign(new Error(message(e)),{status:e.status}));renderCard=card;refresh=async()=>{if(activeDialog)activeDialog.close();await reload();};document.querySelectorAll('[data-reception-only]').forEach(e=>e.hidden=false);}
  function clear(){if(activeDialog)activeDialog.close();model=null;offset=clientOffset=rangeOffset=0;for(const id of ['home-view','calendar-view','clients-view'])$('#'+id)?.replaceChildren();const root=$('#revenue-view');if(root?.dataset.reception){root.replaceChildren();delete root.dataset.reception;}}
- return {init,editor,actions,home,calendar,clients,finance,clear,statusLabel:s=>translate(names[s]||s)};
+ return {init,editor,actions,home,calendar,clients,finance,clear,statusLabel:s=>translate(names[s]||s),bookingMaster};
 })();

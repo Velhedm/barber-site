@@ -203,6 +203,7 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
         if (!activeStates.includes(previous.status) || previous.date !== input.date || previous.time !== input.time || previous.room !== input.room || result.master_id !== input.masterId || previous.name !== name || previous.phone !== phone || JSON.stringify(ids) !== JSON.stringify(previousIds)) throw failure(409, 'Booking retry differs');
         return result;
       }
+      if(!internal&&!(await db.prepare('SELECT online FROM ilker_business_settings WHERE id=1').get())?.online)throw failure(409,'Online booking unavailable');
       const {data,master,chosen}=await evaluate(input,{internal});
       if (!data.slots.some(slot => slot.time === input.time && slot.status === 'available')) throw failure(409, 'Time unavailable');
 

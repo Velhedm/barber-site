@@ -1,12 +1,16 @@
 'use strict';
 (() => {
  const dictionary = {
+ "Отмена до начала визита":{"ru":"Онлайн-отмена возможна до начала визита.","az":"Onlayn ləğv ziyarət başlamazdan əvvəl mümkündür.","en":"Online cancellation is available before the visit starts."},
+ "Отмена не позднее чем за {minutes} минут":{"ru":"Онлайн-отмена возможна не позднее чем за {minutes} минут до визита.","az":"Onlayn ləğv ziyarətə ən azı {minutes} dəqiqə qalanadək mümkündür.","en":"Online cancellation is available at least {minutes} minutes before the visit."},
+ "Online booking unavailable":{"az":"Onlayn rezervasiya müvəqqəti bağlıdır. Zəhmət olmasa, salonla əlaqə saxlayın.","ru":"Онлайн-запись временно закрыта. Пожалуйста, свяжитесь с салоном.","en":"Online booking is temporarily closed. Please contact the salon."},
+ "Запись временно закрыта":{"az":"Onlayn rezervasiya müvəqqəti bağlıdır","ru":"Онлайн-запись временно закрыта","en":"Online booking is temporarily closed"},
  "Email (istəyə bağlı)":{"az":"Email (istəyə bağlı)","ru":"Email (необязательно)","en":"Email (optional)"},
  "Ziyarət barədə Email xatırlatmaları almağa razıyam.":{"az":"Ziyarət barədə Email xatırlatmaları almağa razıyam.","ru":"Я согласен получать напоминания о визите по Email.","en":"I agree to receive visit reminders by email."},
  "Invalid reminder consent":{"az":"Xatırlatma üçün düzgün Email daxil edin.","ru":"Укажите корректный Email для напоминаний.","en":"Enter a valid email address for reminders."},
  "Reminders unavailable":{"az":"Email xatırlatmaları artıq mövcud deyil. Səhifəni yeniləyin.","ru":"Напоминания по Email сейчас недоступны. Обновите страницу.","en":"Email reminders are unavailable. Refresh the page."},
  "Отменить запись": {"ru":"Отменить запись","az":"Rezervasiyanı ləğv et","en":"Cancel booking"},
- "Сохраните ссылку: она позволит отменить запись до начала визита.": {"ru":"Сохраните ссылку: она позволит отменить запись до начала визита.","az":"Bu keçidi saxlayın: ziyarət başlamazdan əvvəl rezervasiyanı ləğv edə bilərsiniz.","en":"Save this link to cancel your booking before your visit."},
+ "Сохраните ссылку: она позволит отменить запись до начала визита.": {"ru":"Сохраните ссылку для отмены записи. Срок отмены устанавливает салон.","az":"Rezervasiyanı ləğv etmək üçün bu keçidi saxlayın. Ləğv müddətini salon müəyyən edir.","en":"Save this link to cancel your booking. The salon sets the cancellation deadline."},
  "Quote changed": {"ru":"Цена или длительность услуги изменилась. Проверьте итог и выберите время ещё раз.","az":"Xidmətin qiyməti və ya müddəti dəyişib. Yekunu yoxlayın və vaxtı yenidən seçin.","en":"The price or duration changed. Review the total and select a time again."},
  "Мастер": {
   "ru": "Мастер",
@@ -782,7 +786,8 @@
 };
  let language='az';
  try {const saved=localStorage.getItem('ilkersevim.language');if(['ru','az','en'].includes(saved))language=saved;else if(saved!==null)localStorage.setItem('ilkersevim.language','az');}catch{/* Language still works when storage is unavailable. */}
- const t=key=>dictionary[key]?.[language]??key;
+ let businessName='',businessPhone='';
+ const t=key=>{let value=dictionary[key]?.[language]??key;if(businessName)value=value.replace(/İlker Sevim Barber Club|İlker Sevim|İLKER SEVİM/g,businessName);if(businessPhone)value=value.replace(/\+994 10 321 51 51/g,businessPhone);return value;};
  const aliases=new Map();for(const [key,values]of Object.entries(dictionary))for(const value of [key,values.ru,values.az,values.en])aliases.set(value.trim(),key);
  const texts=[],attributes=[];
  const walker=document.createTreeWalker(document.documentElement,NodeFilter.SHOW_TEXT);
@@ -800,7 +805,7 @@
   const value=parts.join(' ');if(!options.weekday)return value;
   const index=new Date(Date.UTC(year,month-1,day)).getUTCDay();return (options.weekday==='short'?shortDays:weekdays)[language][index]+', '+value;
  }
- window.RTI18n={t,formatDate,get language(){return language;},known:key=>Object.hasOwn(dictionary,key)};
+ window.RTI18n={t,formatDate,setBusiness(value,phone){businessName=typeof value==='string'?value:'';businessPhone=typeof phone==='string'?phone:'';apply();},get language(){return language;},known:key=>Object.hasOwn(dictionary,key)};
  document.querySelectorAll('[data-language]').forEach(button=>button.addEventListener('click',()=>setLanguage(button.dataset.language)));
  apply();
 })();
