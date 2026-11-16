@@ -60,6 +60,32 @@ grants, policies, external dependencies and production recovery were not verifie
 Before release, verify role/grant restoration and rehearse a separately protected
 production backup without overwriting later live bookings.
 
+## Production-derived local restore rehearsal, 2026-11-16
+
+At approximately 18:49–18:50 UTC, a read-only PostgreSQL 18 dump of the eight
+`public.ilker_*` production tables was encrypted with AES-256. A separate encrypted
+schema-only dump includes ACLs. Both remain in a private local directory; the random
+passphrase is in another private directory **on the same machine**, which is not
+independent storage. Temporary connection credentials and diagnostic output were
+removed after the operation. No production records or settings were modified.
+
+The schema and data were restored into an isolated, network-disabled PostgreSQL 18
+container. Because the split schema/data restore initially encountered foreign-key
+load ordering, a fresh disposable database was restored using `--disable-triggers`
+for data loading; explicit application foreign-key orphan checks returned zero.
+After applying a deterministic C collation for comparisons, counts and whole-row
+fingerprints matched the then-current production state in all eight tables.
+SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER privileges for the
+`ilker_service` role matched and a restricted SELECT succeeded. The rehearsal
+container and its temporary volume were removed afterwards; encrypted copies remain.
+
+This is a point-in-time local backup, not an independently stored backup or a tested
+full application recovery. Global role definitions, passwords, memberships, schema
+policies, external services, and new records after the dump are not covered by the
+matching check. Before release, create a fresh encrypted backup, independently store
+the backup and key, review roles/policies and rehearse full application access; never
+overwrite later real visits with the old snapshot.
+
 
 ## Access migration (stage 3A)
 

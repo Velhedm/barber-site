@@ -42,7 +42,7 @@ y=section(y,'Yapılan kontroller',[
  'Parola sıfırlama bağlantısı tek kullanımlıktır ve süresi dolabilir. E-posta hatırlatmaları yalnızca müşteri onayıyla planlanır. Gerçek e-posta hizmeti henüz bağlanmadığından gerçek teslimat testi yapılmadı.'
 ])
 y=section(y,'Açık kalan noktalar',[
- 'Bu rapor test ortamındaki sürümü anlatır. Canlı veritabanı için ayrı şifreli yedek ve geri yükleme denemesi ile gerçek iPhone üzerinde PWA ve Push kabul testi canlıya geçmeden önce gereklidir.',
+ 'Bu rapor test ortamındaki sürümü anlatır. Canlı tablolardan alınan şifreli kopya yerel bir veritabanına geri yüklendi ve kayıtlar karşılaştırıldı. Bağımsız yedek saklama, tam uygulama geri yükleme ve gerçek iPhone üzerinde PWA ve Push testi hâlâ gereklidir.',
  'Ücretsiz sunucu uykuya geçebilir; bildirimlerin tam zamanında gelmesi garanti edilemez. Mesaj servisleri ücret veya ek ayar gerektirebilir. Usta isimleri, çalışma saatleri ve iletişim bilgileri işletme sahibi tarafından doğrulanmalıdır.',
  'Hiçbir sistem için mutlak güvenlik garantisi verilemez. Bu kontroller bağımsız bir sızma testinin yerini tutmaz. Mevcut canlı site bu aşamada değiştirilmedi.'
 ])
