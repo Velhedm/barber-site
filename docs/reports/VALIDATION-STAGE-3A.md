@@ -57,3 +57,11 @@ and concurrent workers. Default suite: 51 tests, 48 passed, 3 opt-in database te
 skipped; the management PostgreSQL suite passed separately. Real iPhone delivery and
 system-error notifications are not verified. Delivery is at-least-once, not guaranteed
 exactly-once; a persistently failing earlier event delays later events for that device.
+
+## Admin language and Push preference follow-up
+
+Locally, account settings warnings and password mismatch errors were tested in RU/EN
+while the dialog remained open; input was preserved. The browser test exercised rapid
+AZ/RU switches and verified the current account's Push language. An isolated PostgreSQL
+test verified concurrent updates to language and privacy preserved both values. This
+does not validate translation completeness or real-device Push delivery.

@@ -10,8 +10,9 @@ Render auto-deploys the former; pushing there would publish unfinished functiona
    grants and dependencies using a **direct** migration/backup connection. Keep encryption
    key and backup separately. PostgreSQL client tools must support server version 18.
    No backup files or credentials in Git. `scripts/backup.js` does not cover Neon.
-3. Restore the backup to an isolated test database and verify booking/item counts,
-   financial totals, session policies and synthetic access. Record the restore evidence.
+3. Restore the production backup to an isolated test database and verify booking/item
+   counts, financial totals, grants, session policies and synthetic access. A preliminary
+   test-branch-only restore was completed; it does not replace this production rehearsal.
 4. Rehearse migration against a fresh Neon branch. It adds tables, seeds 7 offline unnamed
    placeholders and imports existing catalog/settings. It removes the obsolete global
    unique-start index, replacing single-capacity scheduling with transactional checks.
@@ -43,6 +44,19 @@ PostgreSQL test requires `ILKER_TEST_DATABASE_URL` and matching
 it migrates that branch's copied Ilker tables and adds CRM links/opening balances, creates an isolated synthetic schema and
 removes that synthetic schema after the test. It must never run against production.
 No test should use production push credentials or real customer destinations.
+
+## Preliminary test-branch restore, 2026-11-16
+
+An encrypted AES-256 custom-format pg_dump of `public.ilker_*` from the isolated Neon
+test branch was restored into a network-isolated disposable PostgreSQL 18 container.
+Counts of appointments, booking items, clients and finance entries, the financial total,
+and fingerprints of appointments and booking items matched. The local restored database
+and its anonymous volume were removed after comparison; the encrypted test dump remains
+in the private workspace. Its key is stored in a separate directory on the same machine,
+which is not independent backup storage. The dump used `--no-owner --no-acl`; roles,
+grants, policies, external dependencies and production recovery were not verified.
+Before release, verify role/grant restoration and rehearse a separately protected
+production backup without overwriting later live bookings.
 
 
 ## Access migration (stage 3A)

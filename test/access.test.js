@@ -26,7 +26,7 @@ test('reception server permissions, CSRF, actor attribution and private account 
  for(const route of ['users','masters','rooms','catalog','duration','clients/anonymize','finance/adjust','delete'])assert.equal((await request(route,{},session)).status,403,route);
  for(const route of ['account','account/sessions','dashboard','clients','management','bookings','services','push/config'])assert.equal((await request(route,undefined,session)).status,200,route);
  assert.equal((await request('dashboard',undefined,session)).body.revenueMinor,undefined);
- for(const route of ['account/password','account/preferences','account/revoke','users']){
+ for(const route of ['account/password','account/preferences','account/language','account/revoke','users']){
   assert.equal((await request(route,{}, {...owner,csrf:'invalid'})).status,403);assert.equal((await request(route,{})).status,401);
  }
  const created=await request('clients/save',{name:'Synthetic client',phone:'+994500000123',notes:'internal',requestKey:randomUUID(),actor:'owner'},session);assert.equal(created.status,200);
@@ -76,6 +76,7 @@ test('push ownership, per-user language/privacy and individual session revocatio
  await request('push/unsubscribe',{endpoint:sub.endpoint},owner);assert.equal(await runtime.access.deviceCount(user.id),1);
  assert.equal((await request('push/test',{endpoint:sub.endpoint},owner)).status,400);
  await request('account/preferences',{language:'az',pushPrivate:true},session);assert.equal((await request('push/test',{endpoint:sub.endpoint},session)).status,200);assert.equal(sent[0].body,'Push bildirişinin yoxlanılması');
+ assert.equal((await request('account/language',{language:'en'},session)).body.user.language,'en');assert.equal((await request('account/preferences',{pushPrivate:true},session)).body.user.language,'en');assert.equal((await request('account/language',{language:'az'},session)).body.user.push_private,1);assert.equal((await request('account/language',{language:'tr'},session)).status,400);
  const ownerSub={...sub,endpoint:sub.endpoint+'-owner'};await request('push/subscribe',{subscription:ownerSub},owner);await request('account/preferences',{language:'en',pushPrivate:false},owner);
  await runtime.shop.setDuration('haircut','zal',60);const master=(await runtime.shop.masters()).find(m=>m.id==='master-1');await runtime.shop.saveMaster({id:master.id,revision:master.revision,name:'',online:true,archived:false,stepMinutes:30,serviceIds:['haircut'],schedule:Array.from({length:7},()=>({closed:false,start:'09:00',end:'21:00',breaks:[]}))});
  await runtime.shop.book({name:'Synthetic private client',phone:'+994500000125',date:'2030-01-02',time:'11:00',masterId:master.id,serviceIds:['haircut'],room:'zal',requestKey:randomUUID()});await runtime.drainOutbox();

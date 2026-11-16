@@ -109,8 +109,12 @@ async function createAccessStore(db,{now=Date.now,bootstrapHash,audit}) {
     });
   }
   async function preferences(id,input){
-    if(!['ru','az','en'].includes(input.language)||typeof input.pushPrivate!=='boolean')throw failure(400,'Проверьте настройки.');
-    return db.transaction(async()=>{await activeUser(id);await db.prepare('UPDATE ilker_users SET language=?,push_private=?,revision=revision+1 WHERE id=?').run(input.language,Number(input.pushPrivate),id);await audit(id,'preferences','user',id,{language:input.language,pushPrivate:input.pushPrivate});return safeUser(id);});
+    if((input.language!==undefined&&!['ru','az','en'].includes(input.language))||typeof input.pushPrivate!=='boolean')throw failure(400,'Проверьте настройки.');
+    return db.transaction(async()=>{await activeUser(id);await db.prepare('UPDATE ilker_users SET language=COALESCE(?,language),push_private=?,revision=revision+1 WHERE id=?').run(input.language??null,Number(input.pushPrivate),id);await audit(id,'preferences','user',id,{...(input.language?{language:input.language}:{}),pushPrivate:input.pushPrivate});return safeUser(id);});
+  }
+  async function language(id,value){
+    if(!['ru','az','en'].includes(value))throw failure(400,'Проверьте настройки.');
+    return db.transaction(async()=>{const current=await activeUser(id);if(current.language!==value){await db.prepare('UPDATE ilker_users SET language=?,revision=revision+1 WHERE id=?').run(value,id);await audit(id,'language','user',id,{language:value});}return safeUser(id);});
   }
   async function devices(id,current){
     return (await db.prepare('SELECT a.token_hash,a.created_at,a.last_seen,a.device,s.expires FROM ilker_account_sessions a JOIN ilker_sessions s ON s.token_hash=a.token_hash WHERE a.user_id=? AND s.expires>? ORDER BY a.last_seen DESC').all(id,now())).map(({token_hash,...r})=>({...r,id:token_hash,current:token_hash===current}));
@@ -145,7 +149,7 @@ async function createAccessStore(db,{now=Date.now,bootstrapHash,audit}) {
       await audit(id,'logout','user',id,{devicePushDisabled:true});return {ok:true};
     });
   }
-  return {login,session,changePassword,saveUser,preferences,devices,endSessions,ownsPush,subscribe,unsubscribe,
+  return {login,session,changePassword,saveUser,preferences,language,devices,endSessions,ownsPush,subscribe,unsubscribe,
     logout,
     users:async actor=>{await owner(actor);return db.prepare('SELECT '+safeColumns+' FROM ilker_users ORDER BY created_at,id').all();},
     events:async(actor,offset=0)=>{await owner(actor);return db.prepare('SELECT id,actor,action,entity_type,entity_id,details_json,created_at FROM ilker_audit ORDER BY created_at DESC,id DESC LIMIT 50 OFFSET ?').all(Math.max(0,Math.min(100000,Math.trunc(Number(offset)||0))));},

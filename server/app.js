@@ -113,7 +113,7 @@ async function createApp(options={}){
   'POST /api/admin/master-exception','POST /api/admin/master-block','GET /api/admin/master-day','POST /api/admin/cancel',
   'GET /api/admin/services','POST /api/admin/price','POST /api/admin/complete','GET /api/admin/bookings',
   'GET /api/admin/push/config','POST /api/admin/push/subscribe','POST /api/admin/push/unsubscribe','POST /api/admin/push/test',
-  'GET /api/admin/account','GET /api/admin/account/sessions','POST /api/admin/account/password','POST /api/admin/account/preferences','POST /api/admin/account/revoke'
+  'GET /api/admin/account','GET /api/admin/account/sessions','POST /api/admin/account/password','POST /api/admin/account/preferences','POST /api/admin/account/language','POST /api/admin/account/revoke'
  ]);
  async function auth(req,res,next){const cookie=req.get('cookie')||'';const sessionToken=cookie.split(';').map(x=>x.trim()).find(x=>x.startsWith('rt_session='))?.slice(11);
   const session=access?await access.session(sessionToken):sessionToken&&(await db.prepare('SELECT * FROM sessions WHERE token_hash=? AND expires>?').get(sha(sessionToken),now()));
@@ -143,6 +143,7 @@ async function createApp(options={}){
   app.get('/api/admin/account/sessions',auth,async(req,res)=>res.json({rows:await access.devices(req.user.id,req.session.token_hash)}));
   app.post('/api/admin/account/password',auth,sensitive,async(req,res)=>{const result=await access.changePassword(req.user.id,req.body);res.clearCookie('rt_session',cookieOptions).json(result);});
   app.post('/api/admin/account/preferences',auth,async(req,res)=>res.json({user:await access.preferences(req.user.id,req.body)}));
+  app.post('/api/admin/account/language',auth,async(req,res)=>res.json({user:await access.language(req.user.id,req.body.language)}));
   app.post('/api/admin/account/revoke',auth,sensitive,async(req,res)=>{const result=await access.endSessions(req.user.id,req.body,req.session.token_hash);if(result.signInRequired)res.clearCookie('rt_session',cookieOptions);res.json(result);});
   app.get('/api/admin/users',auth,async(req,res)=>res.json({rows:await access.users(req.user.id)}));
   app.post('/api/admin/users',auth,sensitive,async(req,res)=>res.json(await access.saveUser(req.user.id,req.body)));

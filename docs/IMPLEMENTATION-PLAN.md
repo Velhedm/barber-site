@@ -67,6 +67,7 @@ use their stored translations. Other dynamic sections, some server errors, confi
 prompts and dialog strings remain untranslated.
 The language control must not be published as a complete admin translation until those
 are covered.
-Push language currently has its own saved preference; it does not automatically follow
-the interface-language switch. Do not represent that requirement as completed.
+The interface-language switch synchronizes the active account's Push language using a
+separate authenticated update; it preserves the account's saved privacy preference.
+Real-device verification of localized Push remains a release requirement.
 No claim of completed commercial delivery is made for this branch.

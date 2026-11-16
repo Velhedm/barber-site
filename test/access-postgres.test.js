@@ -10,6 +10,7 @@ test('PostgreSQL access: atomic credential import, shared sessions/revocation, r
   const start=async first=>{const r=await createApp({...config,databaseUrl:parsed.href,management:true,migrateManagement:first,preMigrated:!first,production:false,adminHash,now,vapid:{}});runtimes.push(r);return r;};
   const a=await start(true),[b,c]=await Promise.all([start(false),start(false)]);assert.equal((await a.access.users('owner')).length,1);
   const owner=await a.access.login({password},'owner-ip','iPhone Safari');assert.equal((await b.access.session(owner.raw)).user.id,'owner');
+  await Promise.all([b.access.language('owner','az'),c.access.preferences('owner',{pushPrivate:false})]);const preferences=(await a.access.users('owner'))[0];assert.equal(preferences.language,'az');assert.equal(preferences.push_private,0);
   const user=await b.access.saveUser('owner',{login:'pg-reception',displayName:'Synthetic',role:'reception',active:true,newPassword:'postgres-synthetic-staff',currentPassword:password});
   const staff=await c.access.login({login:user.login,password:'postgres-synthetic-staff'},'staff-ip','Android');assert.equal((await a.access.session(staff.raw)).user.role,'reception');
   const changed=await b.access.saveUser('owner',{id:user.id,revision:user.revision,login:user.login,displayName:'Synthetic',role:'reception',active:false,currentPassword:password});assert.equal(changed.active,0);assert.equal(await c.access.session(staff.raw),null);
