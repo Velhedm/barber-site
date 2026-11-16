@@ -14,15 +14,15 @@ window.IlkerReception=(()=>{
  function note(text){return el('p',text,'small-note');}
  async function catalog(){model=await api('/api/admin/management');return model;}
  function dialog(title){if(activeDialog)activeDialog.close();const d=el('dialog',undefined,'reception-dialog'),heading=el('div',undefined,'reception-dialog-heading'),form=el('form',undefined,'management-form');form.addEventListener('submit',e=>e.preventDefault());const problem=el('p',undefined,'reception-error');problem.role='alert';
-  const headingTitle=el('h2',title),close=button('Закрыть',()=>d.close());window.IlkerAdminI18n?.bind(headingTitle,title);window.IlkerAdminI18n?.bind(close,'Закрыть');heading.append(headingTitle,close);d.append(heading,window.IlkerAdminI18n?.makeSwitcher()||el('span'),problem,form);d.dataset.private='true';document.body.append(d);d.addEventListener('close',()=>{d.remove();if(activeDialog===d)activeDialog=null;});d.showModal();activeDialog=d;
-  return {d,form,problem};}
+  const headingTitle=el('h2',title),close=button('Закрыть',()=>d.close());window.IlkerAdminI18n?.bind(headingTitle,title);window.IlkerAdminI18n?.bind(close,'Закрыть');heading.append(headingTitle,close);d.append(heading,window.IlkerAdminI18n?.makeSwitcher()||el('span'),problem,form);d.dataset.private='true';document.body.append(d);let problemKey='';const renderProblem=()=>{problem.textContent=window.IlkerAdminI18n?.t(problemKey)||problemKey;};document.addEventListener('adminlanguagechange',renderProblem);d.addEventListener('close',()=>{document.removeEventListener('adminlanguagechange',renderProblem);d.remove();if(activeDialog===d)activeDialog=null;});d.showModal();activeDialog=d;
+  return {d,form,problem,setProblem:key=>{problemKey=key;renderProblem();}};}
  function mutationControls(view,fields,action,build,onSuccess){
   let pending=null;const submit=button('Сохранить',async()=>{
-   if(!pending){if(!view.form.reportValidity())return;try{pending=build();}catch(error){view.problem.textContent=message(error);return;}}
-   fields.disabled=true;view.problem.textContent='';submit.disabled=true;
+   if(!pending){if(!view.form.reportValidity())return;try{pending=build();}catch(error){view.setProblem(message(error));return;}}
+   fields.disabled=true;view.setProblem('');submit.disabled=true;
    try{const result=await api(action,pending);pending=null;view.d.close();await onSuccess(result);}
-   catch(error){if(error.status===401){view.d.close();fail(error);return;}view.problem.textContent=message(error);const uncertain=!error.status||error.status>=500;if(!uncertain){pending=null;fields.disabled=false;}else submit.textContent='Повторить безопасно';}
-  },true);view.form.append(submit);return submit;
+   catch(error){if(error.status===401){view.d.close();fail(error);return;}view.setProblem(message(error));const uncertain=!error.status||error.status>=500;if(!uncertain){pending=null;fields.disabled=false;}else {submit.dataset.labelKey='Повторить безопасно';renderSubmit();}}
+  },true);submit.dataset.labelKey='Сохранить';const renderSubmit=()=>{submit.textContent=window.IlkerAdminI18n?.t(submit.dataset.labelKey)||submit.dataset.labelKey;};document.addEventListener('adminlanguagechange',renderSubmit);view.d.addEventListener('close',()=>document.removeEventListener('adminlanguagechange',renderSubmit),{once:true});renderSubmit();view.form.append(submit);return submit;
  }
  function message(error){return messages[error.message]||(error.status?error.message:'Ответ сервера не получен. Повторите тот же запрос: дубликат не создастся.');}
  const messages={'Changed elsewhere; reload':'Запись уже изменена. Закройте окно и откройте свежую запись.','Time unavailable':'Это время занято. Выберите другое.','Invalid status transition':'Этот переход статуса недоступен. Обновите запись.','Visit has not started':'Визит ещё не начался.','Visit has not finished':'Время визита ещё не закончилось.','Arrival is only allowed on visit day':'Приход можно отметить в день визита.','Set actual price first':'Сначала укажите итоговую цену услуги.','Use financial correction':'Для завершённого визита используйте финансовую корректировку.','Client phone already exists':'Клиент с этим телефоном уже есть. Найдите его в списке.','Resolve active visits before anonymizing':'Сначала завершите или отмените действующие визиты клиента.','Invalid phone':'Проверьте номер телефона.','Quote changed':'Цена или длительность изменились. Проверьте свободное время ещё раз.','Master cannot perform selected services':'Мастер не выполняет все выбранные услуги.','Master unavailable':'Мастер недоступен.','Booking cannot be changed':'Эту запись уже нельзя переносить.','Service unavailable':'Услуга недоступна.','Invalid details':'Проверьте введённые данные.'};
@@ -41,21 +41,23 @@ window.IlkerReception=(()=>{
   controls.append(serviceRoot,master.root,when.root,time.root);
   const summary=note('Выберите услуги, мастера и дату, затем проверьте свободное время.');controls.append(summary);let slots=null,sequence=0;
   function data(){return {name:customer.input.value.trim(),phone:phone.input.value.trim(),date:when.input.value,time:time.input.value,masterId:master.input.value,room:category.input.value,serviceIds:checkboxes.filter(c=>c.checked).map(c=>c.value),...(existing?{id:existing.id,revision:existing.revision}:{})};}
-  function masters(){const old=master.input.value||existing?.master_id;selected=checkboxes.filter(c=>c.checked).map(c=>c.value);master.input.replaceChildren(new Option('Выберите мастера',''),...model.masters.filter(m=>!m.archived&&selected.length&&selected.every(id=>m.serviceIds.includes(id))).map(m=>new Option(masterName(m)+(m.online?'':' · только ресепшен'),m.id)));if([...master.input.options].some(o=>o.value===old))master.input.value=old;}
-  function invalidate(){sequence++;slots=null;time.input.replaceChildren(new Option('Проверьте свободное время',''));summary.textContent='Условия изменены. Проверьте свободное время.';}
+  const tr=key=>window.IlkerAdminI18n?.t(key)||key;let summaryKey='Выберите услуги, мастера и дату, затем проверьте свободное время.';
+  function updateSummary(){summary.textContent=slots?`${slots.durationMinutes} ${tr('мин')} · ${slots.priceMin===slots.priceMax?money(slots.priceMin):money(slots.priceMin)+'–'+money(slots.priceMax)}`:tr(summaryKey);}
+  function masters(preserveEmpty=false){const old=preserveEmpty?master.input.value:(master.input.value||existing?.master_id);selected=checkboxes.filter(c=>c.checked).map(c=>c.value);master.input.replaceChildren(new Option(tr('Выберите мастера'),''),...model.masters.filter(m=>!m.archived&&selected.length&&selected.every(id=>m.serviceIds.includes(id))).map(m=>new Option(masterName(m)+(m.online?'':' · '+tr('только ресепшен')),m.id)));if([...master.input.options].some(o=>o.value===old))master.input.value=old;}
+  function renderTime(){const old=time.input.value;time.input.replaceChildren(new Option(tr(slots?'Выберите время':'Проверьте свободное время'),''),...(slots?.slots||[]).map(s=>{const option=new Option(s.time+(s.status==='available'?'':' · '+tr('недоступно')),s.time);option.disabled=s.status!=='available';return option;}));if([...time.input.options].some(o=>o.value===old))time.input.value=old;}
+  function invalidate(){sequence++;slots=null;summaryKey='Условия изменены. Проверьте свободное время.';renderTime();updateSummary();}
   checkboxes.forEach(c=>c.addEventListener('change',()=>{masters();invalidate();}));for(const input of [category.input,when.input,master.input])input.addEventListener('change',invalidate);
-  masters();
+  masters();renderTime();updateSummary();const refreshLanguage=()=>{masters(true);renderTime();updateSummary();};document.addEventListener('adminlanguagechange',refreshLanguage);view.d.addEventListener('close',()=>document.removeEventListener('adminlanguagechange',refreshLanguage),{once:true});
   const checkAvailability=button('Проверить свободное время',async()=>{
-   const payload=data();if(!payload.serviceIds.length||!payload.masterId||!payload.date){view.problem.textContent='Выберите услуги, мастера и дату.';return;}
-   const id=++sequence;view.problem.textContent='';
-   try{const result=await api('/api/admin/availability',{...payload,time:existing?.time||payload.time});if(id!==sequence)return;slots=result;time.input.replaceChildren(new Option('Выберите время',''),...result.slots.map(s=>{const option=new Option(s.time+(s.status==='available'?'':' · недоступно'),s.time);option.disabled=s.status!=='available';return option;}));if(existing&&result.slots.some(s=>s.time===existing.time&&s.status==='available'))time.input.value=existing.time;
-    summary.textContent=`${result.durationMinutes} мин · ${result.priceMin===result.priceMax?money(result.priceMin):money(result.priceMin)+'–'+money(result.priceMax)}`;
-   }catch(error){view.problem.textContent=message(error);}
+   const payload=data();if(!payload.serviceIds.length||!payload.masterId||!payload.date){view.setProblem('Выберите услуги, мастера и дату.');return;}
+   const id=++sequence;view.setProblem('');
+   try{const result=await api('/api/admin/availability',{...payload,time:existing?.time||payload.time});if(id!==sequence)return;slots=result;renderTime();if(existing&&result.slots.some(s=>s.time===existing.time&&s.status==='available'))time.input.value=existing.time;updateSummary();
+   }catch(error){view.setProblem(message(error));}
   });window.IlkerAdminI18n?.bind(checkAvailability,'Проверить свободное время');controls.append(checkAvailability);
   const save=mutationControls(view,controls,existing?'/api/admin/bookings/reschedule':'/api/admin/bookings/create',()=>{
    if(!slots||!slots.slots.some(s=>s.time===time.input.value&&s.status==='available'))throw Object.assign(new Error('Time unavailable'),{status:409});
    return {...data(),requestKey:crypto.randomUUID(),expectedQuote:{min:slots.priceMin,max:slots.priceMax,duration:slots.durationMinutes}};
-  },async()=>{await refresh();});save.textContent=existing?'Сохранить изменения':'Создать запись';
+  },async()=>{await refresh();});save.dataset.labelKey=existing?'Сохранить изменения':'Создать запись';save.textContent=tr(save.dataset.labelKey);
  }
  function actions(row,root){
   if(['active','arrived'].includes(row.status)&&!row.archived)root.append(button('Перенести / изменить услуги',()=>editor(row)));
