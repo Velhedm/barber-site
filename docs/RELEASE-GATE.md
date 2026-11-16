@@ -18,7 +18,7 @@ Render auto-deploys the former; pushing there would publish unfinished functiona
 5. Run full unit/API/browser/two-instance PostgreSQL tests, then real iPhone PWA/Push checks.
 6. Assign historical unassigned bookings through the stage-2 reschedule action before
    enabling new masters. Unassigned active intervals intentionally block all masters.
-7. Explicit migrations 1–4 (masters, reception/CRM/finance, accounts, Push leases): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
+7. Explicit migrations 1–6 (masters, reception/CRM/finance, accounts, Push leases, change events and ordering): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
    `node scripts/migrate-management.js --apply`. Then review/apply
    `migrations/management-grants.sql` with the database owner, never at app startup.
 8. Only when all release gates pass, deploy tested commit and enable `MANAGEMENT_ENABLED=true`.
@@ -99,4 +99,13 @@ change a booking. Treat the link like a password; anyone possessing it can cance
 The customer must save the link, as no delivery provider is configured. It follows
 rescheduling and only permits cancellation before the latest start time. Repeated POSTs
 are safe. No personal data is returned. Bookings made before this UI do not acquire a
-link automatically. Cancellation Push notifications remain an unmet release requirement.
+link automatically. The link must be saved; external delivery remains unconfigured.
+
+## Booking-change Push
+
+Migrations 5–6 add a transactional outbox for cancellation, rescheduling and master
+changes. Each subscription receives a separately leased task; sensitive contacts are
+excluded, and the recipient's language and privacy choice apply at delivery time. A
+later event for the same booking/device waits for an earlier event to be delivered.
+Provider responses can be lost, so exactly-once delivery cannot be guaranteed. System
+error alerts and real-device acceptance remain outstanding. The free server may sleep.

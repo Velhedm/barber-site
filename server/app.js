@@ -4,6 +4,7 @@ const {AsyncLocalStorage}=require('node:async_hooks');
 const {createAccessStore}=require('./access-store');
 const {migrateAccess}=require('./access-migration');
 const {migratePush}=require('./push-migration');
+const {migratePushChanges,migratePushOrder,createPushChanges}=require('./push-changes');
 const helmet=require('helmet');
 const {rateLimit}=require('express-rate-limit');
 const {createDatabase}=require('./database');
@@ -50,6 +51,7 @@ async function createApp(options={}){
  const now=options.now||(()=>Date.now());
 
  const management=options.management??(process.env.MANAGEMENT_ENABLED==='true');
+ const changes=createPushChanges(db,{now,send:pushSend});
  let reception=null;
  const onBooked=async (bookingId,context)=>{
   if(reception)await reception.linkCreated(bookingId,context);
@@ -61,7 +63,7 @@ async function createApp(options={}){
  if(management){
   if(options.migrateManagement&&!options.preMigrated){await migrateManagement(db);await migrateReception(db);}
   shop=await createManagementStore(db,shop,{now,onBooked});
-  reception=await createReceptionStore(db,shop,{now});shop=reception;
+  reception=await createReceptionStore(db,shop,{now,onChange:changes.enqueue});shop=reception;
  }
  if(!options.preMigrated)await db.exec(`
  CREATE TABLE IF NOT EXISTS ilker_sessions(token_hash TEXT PRIMARY KEY,csrf TEXT NOT NULL,expires BIGINT NOT NULL);
@@ -70,7 +72,7 @@ async function createApp(options={}){
  CREATE TABLE IF NOT EXISTS ilker_push_deliveries(id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES ilker_push_events(id) ON DELETE CASCADE,subscription_id TEXT NOT NULL REFERENCES ilker_push_subscriptions(id) ON DELETE CASCADE,attempts INTEGER NOT NULL DEFAULT 0,next_attempt BIGINT NOT NULL DEFAULT 0,sent_at BIGINT,last_error TEXT,UNIQUE(event_id,subscription_id));
  `);
  let access=null;
- if(management){if(options.migrateManagement&&!options.preMigrated){await migrateAccess(db);await migratePush(db);}if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=4').get())throw new Error('Push migration required');access=await createAccessStore(db,{now,bootstrapHash:adminHash,audit:shop.audit});}
+ if(management){if(options.migrateManagement&&!options.preMigrated){await migrateAccess(db);await migratePush(db);await migratePushChanges(db);await migratePushOrder(db);}if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=6').get())throw new Error('Push migration required');access=await createAccessStore(db,{now,bootstrapHash:adminHash,audit:shop.audit});}
  const hours=Array.from({length:12},(_,i)=>String(9+i).padStart(2,'0')+':00');
  const horizon=365;
  function today(){return new Date(now()+4*3600000).toISOString().slice(0,10);}
@@ -258,6 +260,7 @@ async function createApp(options={}){
     const attempts=job.attempts+1;await finish(()=>db.prepare('UPDATE push_deliveries SET attempts=?,next_attempt=?,last_error=? WHERE id=?').run(attempts,now()+Math.min(3600000,10000*2**Math.min(attempts,8)),'push_unavailable',job.delivery_id));
    }finally{if(management)await db.prepare('DELETE FROM ilker_push_leases WHERE delivery_id=? AND token=?').run(job.delivery_id,job.lease);}
   }
+  if(management)await changes.drain();
  }finally{draining=false;}}
  // Always revalidate the worker and private UI. APIs and private records never enter a Service Worker cache.
  app.get('/sw.js',async(req,res)=>{res.set({'Cache-Control':'no-cache','Service-Worker-Allowed':'/'}).sendFile(path.join(__dirname,'../dist/sw.js'));});

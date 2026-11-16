@@ -20,4 +20,7 @@ REVOKE DELETE,TRUNCATE ON ilker_users FROM ilker_service;
 GRANT SELECT,INSERT,UPDATE,DELETE ON ilker_account_sessions,ilker_login_attempts,ilker_push_owners TO ilker_service;
 REVOKE ALL ON ilker_push_leases FROM PUBLIC;
 GRANT SELECT,INSERT,UPDATE,DELETE ON ilker_push_leases TO ilker_service;
+REVOKE ALL ON ilker_push_changes,ilker_push_change_deliveries FROM PUBLIC;
+GRANT SELECT,INSERT ON ilker_push_changes TO ilker_service;
+GRANT SELECT,INSERT,UPDATE ON ilker_push_change_deliveries TO ilker_service;
 COMMIT;

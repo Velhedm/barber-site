@@ -58,6 +58,6 @@ SMS/WhatsApp/email credentials and costs are separate from Web Push.
 
 See `reports/STAGE-1-RU.md`, `reports/VALIDATION.md` and `RELEASE-GATE.md`.
 Rescheduling, reception, CRM and the financial ledger are implemented in stage 2.
-See `reports/STAGE-2-RU.md` and `reports/STAGE-3A-RU.md`. Account roles, password changes, session revocation and client cancellation links are implemented. Recovery email, communication,
+See `reports/STAGE-2-RU.md` and `reports/STAGE-3A-RU.md`. Account roles, password changes, session revocation, client cancellation links and booking-change Push events are implemented. Recovery email, reminders,
 full admin localization, PWA updates and release verification remain pending in stages 3–4.
 No claim of completed commercial delivery is made for this branch.

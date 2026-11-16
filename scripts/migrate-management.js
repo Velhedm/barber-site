@@ -4,6 +4,7 @@ const {migrateManagement} = require('../server/management-migration');
 const {migrateReception}=require('../server/reception-migration');
 const {migrateAccess}=require('../server/access-migration');
 const {migratePush}=require('../server/push-migration');
+const {migratePushChanges,migratePushOrder}=require('../server/push-changes');
 
 async function main() {
   const url = process.env.ILKER_MIGRATION_DATABASE_URL;
@@ -17,10 +18,12 @@ async function main() {
     await migrateManagement(db);
     await migrateReception(db);
     await migrateAccess(db);
-    const result = await migratePush(db);
+    await migratePush(db);
+    await migratePushChanges(db);
+    const result = await migratePushOrder(db);
     const after = await db.prepare('SELECT COUNT(*) AS n FROM ilker_appointments').get();
     if (before.n !== after.n) throw new Error('Record preservation check failed');
-    console.log(JSON.stringify({migration: 4, ...result, existingAppointmentCountUnchanged: true}));
+    console.log(JSON.stringify({migration: 6, ...result, existingAppointmentCountUnchanged: true}));
   } finally {await db.close();}
 }
 main().catch(() => {console.error('Migration failed; no secrets or customer details logged. Inspect a test environment before retrying.'); process.exitCode = 1;});

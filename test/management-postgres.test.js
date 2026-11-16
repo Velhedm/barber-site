@@ -8,6 +8,7 @@ const {migrateManagement} = require('../server/management-migration');
 const {migrateReception}=require('../server/reception-migration');
 const {migrateAccess}=require('../server/access-migration');
 const {migratePush}=require('../server/push-migration');
+const {migratePushChanges,migratePushOrder}=require('../server/push-changes');
 
 // Isolated schema AND explicit test-branch hostname: no synthetic rows in real tables.
 test('PostgreSQL: migration preserves copied records; independent processes serialize overlapping requests', {skip: !process.env.ILKER_TEST_DATABASE_URL}, async () => {
@@ -18,7 +19,7 @@ test('PostgreSQL: migration preserves copied records; independent processes seri
   const control = await createDatabase(configuration);
   const schema = 'ilker_test_' + randomUUID().replaceAll('-', '');
   const runtimes = [];
-  const keys=require('web-push').generateVAPIDKeys();let sent=0,release,ready;
+  const keys=require('web-push').generateVAPIDKeys();let sent=0,release,ready,autoSend=false;const payloads=[];
   const adminHash=await require('../server/access-store').hashPassword('synthetic-postgres-owner');
   const started=new Promise(resolve=>ready=resolve);
   try {
@@ -31,6 +32,8 @@ test('PostgreSQL: migration preserves copied records; independent processes seri
     await migrateReception(control);
     await migrateAccess(control);
     await migratePush(control);
+    await migratePushChanges(control);
+    await migratePushOrder(control);
     assert.equal((await migrateReception(control)).alreadyApplied,true);
     const oldRevenue=await control.prepare("SELECT COALESCE(SUM(actual_price),0) AS n FROM ilker_appointments WHERE kind='booking' AND status='completed'").get();
     const migratedRevenue=await control.prepare("SELECT COALESCE(SUM(amount),0) AS n FROM ilker_finance_entries WHERE reason='opening_balance'").get();
@@ -43,7 +46,7 @@ test('PostgreSQL: migration preserves copied records; independent processes seri
     await control.exec('CREATE SCHEMA ' + schema);
     parsed.searchParams.set('options', '-c search_path=' + schema);
     async function start() {
-      const runtime = await createApp({...configuration, databaseUrl: parsed.href, management: true, migrateManagement: runtimes.length===0, preMigrated:runtimes.length>0, production: false, adminHash, now: () => Date.parse('2030-01-01T00:00:00Z'), vapid: {subject:'mailto:synthetic@example.invalid',publicKey:keys.publicKey,privateKey:keys.privateKey},pushSend:async()=>{sent++;ready();await new Promise(resolve=>release=resolve);}});
+      const runtime = await createApp({...configuration, databaseUrl: parsed.href, management: true, migrateManagement: runtimes.length===0, preMigrated:runtimes.length>0, production: false, adminHash, now: () => Date.parse('2030-01-01T00:00:00Z'), vapid: {subject:'mailto:synthetic@example.invalid',publicKey:keys.publicKey,privateKey:keys.privateKey},pushSend:async(_,body)=>{sent++;if(autoSend){payloads.push(JSON.parse(body));return;}ready();await new Promise(resolve=>release=resolve);}});
       runtimes.push(runtime);return runtime;
     }
     const a = await start();
@@ -66,7 +69,7 @@ test('PostgreSQL: migration preserves copied records; independent processes seri
     await a.shop.book({...request('master-1','18:00'),date:'2030-01-05'});
     const draining=a.drainOutbox();await started;await b.drainOutbox();assert.equal(sent,1);release();await draining;
     const beforeMove=await a.shop.getBooking(independent.id),move={id:independent.id,revision:beforeMove.revision,requestKey:randomUUID(),date:'2030-01-03',time:'11:30',masterId:'master-1',room:'zal',serviceIds:['haircut']};
-    const moved=await b.shop.reschedule(move);assert.equal(moved.master_id,'master-1');assert.equal((await a.shop.reschedule(move)).revision,moved.revision);
+    const moved=await b.shop.reschedule(move);assert.equal(moved.master_id,'master-1');assert.equal((await a.shop.reschedule(move)).revision,moved.revision);assert.equal((await a.db.prepare('SELECT COUNT(*) AS n FROM ilker_push_changes WHERE booking_id=?').get(moved.id)).n,1);
     const another=await a.shop.book({...request('master-2','16:00'),date:'2030-01-03'});
     const competing=await Promise.allSettled([moved,another].map((row,i)=>(i?a:b).shop.reschedule({id:row.id,revision:row.revision,requestKey:randomUUID(),date:'2030-01-04',time:'10:00',masterId:'master-2',room:'zal',serviceIds:['haircut']})));
     assert.equal(competing.filter(r=>r.status==='fulfilled').length,1);assert.equal(competing.find(r=>r.status==='rejected').reason.status,409);
@@ -79,6 +82,7 @@ test('PostgreSQL: migration preserves copied records; independent processes seri
     assert.equal((await a.shop.finance({from:'2029-12-31',to:'2029-12-31'})).totalMinor,3500);
     assert.equal((await a.shop.ledgerHistory(id)).length,1);
     const share=await a.db.prepare('SELECT SUM(amount) AS n FROM ilker_finance_items').get();assert.equal(share.n,3500);
+    autoSend=true;await c.drainOutbox();assert.ok(payloads.some(p=>p.title.includes('Мастер изменён')));assert.ok(!JSON.stringify(payloads).includes('+994500000001'));
 
   } finally {
     await Promise.all(runtimes.map(r=>r.close()));

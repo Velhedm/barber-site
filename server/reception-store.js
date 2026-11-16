@@ -8,7 +8,7 @@ const snapshotItem=i=>({serviceId:i.service_id,name:i.service_name,priceMin:i.pr
 const financeReasons=['discount','refund','correction'];
 const noteText=value=>{if(value===undefined||value===null)return '';if(typeof value!=='string'||value.length>1000||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value))throw failure(400,'Invalid details');return value.trim();};
 
-async function createReceptionStore(db,base,{now=()=>Date.now()}={}){
+async function createReceptionStore(db,base,{now=()=>Date.now(),onChange=async()=>{}}={}){
  if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=2').get())throw new Error('Reception migration required');
  const iso=()=>new Date(now()).toISOString(),today=()=>new Date(now()+14400000).toISOString().slice(0,10);
  async function clientFor(name,phone){
@@ -73,6 +73,7 @@ async function createReceptionStore(db,base,{now=()=>Date.now()}={}){
    await db.prepare('INSERT INTO ilker_booking_assignment(booking_id,master_id,master_name,room_id,room_name) VALUES(?,?,?,?,?) ON CONFLICT(booking_id) DO UPDATE SET master_id=excluded.master_id,master_name=excluded.master_name,room_id=excluded.room_id,room_name=excluded.room_name,revision=ilker_booking_assignment.revision+1')
     .run(row.id,master.id,masterName,master.room_id,master.room_name||null);
    if(!same){await db.prepare('DELETE FROM ilker_booking_items WHERE booking_id=?').run(row.id);await base.writeItems(row.id,chosen);}
+   if(row.date!==input.date||row.time!==input.time||row.master_id!==master.id)await onChange(row.id,row.master_id!==master.id?'master_changed':'moved');
    await base.audit(actor,'reschedule','booking',row.id,{before:snapshot(row),after:{date:input.date,time:input.time,masterId:master.id,roomId:master.room_id,category:input.room,duration:data.durationMinutes,items:chosen}});
   });
  }
@@ -98,6 +99,7 @@ async function createReceptionStore(db,base,{now=()=>Date.now()}={}){
     if(!await db.prepare('SELECT id FROM ilker_finance_entries WHERE operation_key=?').get('completion:'+row.id))await ledger(row,row.actual_price,'completion','completion:'+row.id,actor);
    }
    await db.prepare('UPDATE ilker_appointments SET status=? WHERE id=?').run(input.status,row.id);
+   if(input.status==='cancelled')await onChange(row.id,'cancelled');
    await base.audit(actor,'status','booking',row.id,{from:row.status,to:input.status,paymentPreserved:true});
   });
  }
@@ -113,6 +115,7 @@ async function createReceptionStore(db,base,{now=()=>Date.now()}={}){
    if(row.status!=='active'||Date.parse(`${row.date}T${row.time}:00+04:00`)<=now())throw failure(409,'Cancellation unavailable');
    await db.prepare("UPDATE ilker_appointments SET status='cancelled' WHERE id=?").run(id);
    await bump(id);
+   await onChange(id,'cancelled');
    await base.audit('public','status','booking',id,{from:'active',to:'cancelled',paymentPreserved:true});
    return {ok:true};
   });

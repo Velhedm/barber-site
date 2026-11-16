@@ -45,3 +45,15 @@ language works, confirmation cancels and no horizontal overflow occurred at 390p
 Local tests also cover invalid capability, cross-origin rejection, cancellation after
 reschedule, refusal at/after visit start and repeated cancellation. No physical iPhone
 or outbound cancellation notification was tested. Cancellation Push remains pending.
+
+## Booking-change Push follow-up
+
+Migrations 5–6 passed on an isolated Neon branch; copied appointments and items
+retained the same fingerprints. Synthetic PostgreSQL tests passed across multiple app
+instances and exercised the change outbox and a mocked Push provider. Local tests
+verified transaction rollback when queuing fails, idempotent retries, expiry/retry,
+sequential event order for a booking/device, per-user language and private payloads,
+and concurrent workers. Default suite: 51 tests, 48 passed, 3 opt-in database tests
+skipped; the management PostgreSQL suite passed separately. Real iPhone delivery and
+system-error notifications are not verified. Delivery is at-least-once, not guaranteed
+exactly-once; a persistently failing earlier event delays later events for that device.
