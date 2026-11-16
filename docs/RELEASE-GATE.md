@@ -77,6 +77,8 @@ Claims are serialized with the existing transaction lock. A worker crash release
 claim after five minutes. Delivery remains at-least-once: a crash after the provider
 accepts a Push but before the database records success can cause a duplicate. No claim
 of exactly-once delivery is made. Existing subscriptions and queued deliveries remain.
+Results from a worker whose lease has been replaced cannot change delivery state or
+delete a subscription; verify on the test database before a release.
 
 ## PWA manifests
 

@@ -236,6 +236,13 @@ async function createApp(options={}){
    return candidates;
   }):await db.prepare(query+' ORDER BY d.id LIMIT 20').all(now());
   for(const job of jobs){
+   // A timed-out worker must not overwrite a newer worker's outcome, or delete
+   // a device after ownership of the attempt has passed to another worker.
+   const finish=async fn=>management?db.transaction(async()=>{
+    const lease=await db.prepare('SELECT token FROM ilker_push_leases WHERE delivery_id=?').get(job.delivery_id);
+    if(lease?.token!==job.lease)return;
+    await fn();await db.prepare('DELETE FROM ilker_push_leases WHERE delivery_id=? AND token=?').run(job.delivery_id,job.lease);
+   }):fn();
    if(!(await db.prepare('SELECT 1 FROM push_subscriptions WHERE id=?').get(job.subscription_id))||!(await db.prepare("SELECT 1 FROM slots WHERE id=? AND status='active'").get(job.booking_id)))continue;
    try{
     const minutes=Number(job.time.slice(0,2))*60+Number(job.time.slice(3))+job.duration_minutes;const end=String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(minutes%60).padStart(2,'0');
@@ -245,9 +252,9 @@ async function createApp(options={}){
     const payload={title:'Новая запись · İlker Sevim Barber Club',body:`${job.date}, ${job.time}–${end} · Баку. Открой панель для деталей.`,tag:'booking-'+job.booking_id,url:'/admin.html?booking='+job.booking_id};
     if(recipient){payload.title=texts[0]+' · İlker Sevim';payload.body=recipient.push_private?texts[1]:`${job.date}, ${job.time}–${end} · ${texts[1]}`;}
     await pushSend(JSON.parse(job.subscription),JSON.stringify(payload));
-    (await db.prepare('UPDATE push_deliveries SET sent_at=?,last_error=NULL WHERE id=?').run(now(),job.delivery_id));
-   }catch(e){if([404,410].includes(e.statusCode)){(await db.prepare('DELETE FROM push_subscriptions WHERE id=?').run(job.subscription_id));continue;}
-    const attempts=job.attempts+1;(await db.prepare('UPDATE push_deliveries SET attempts=?,next_attempt=?,last_error=? WHERE id=?').run(attempts,now()+Math.min(3600000,10000*2**Math.min(attempts,8)),'push_unavailable',job.delivery_id));
+    await finish(()=>db.prepare('UPDATE push_deliveries SET sent_at=?,last_error=NULL WHERE id=?').run(now(),job.delivery_id));
+   }catch(e){if([404,410].includes(e.statusCode)){await finish(()=>db.prepare('DELETE FROM push_subscriptions WHERE id=?').run(job.subscription_id));continue;}
+    const attempts=job.attempts+1;await finish(()=>db.prepare('UPDATE push_deliveries SET attempts=?,next_attempt=?,last_error=? WHERE id=?').run(attempts,now()+Math.min(3600000,10000*2**Math.min(attempts,8)),'push_unavailable',job.delivery_id));
    }finally{if(management)await db.prepare('DELETE FROM ilker_push_leases WHERE delivery_id=? AND token=?').run(job.delivery_id,job.lease);}
   }
  }finally{draining=false;}}
