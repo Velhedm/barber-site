@@ -199,6 +199,7 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
       if (previous) {
         const result = await publicResult(previous);
         const previousIds = result.items.map(item => item.service_id);
+        if(input.reminder?.consent){const existing=await db.prepare('SELECT email,language FROM ilker_reminder_consent WHERE booking_id=?').get(previous.id);if(!existing||existing.email!==String(input.reminder.email||'').trim().toLowerCase()||existing.language!==input.reminder.language)throw failure(409,'Booking retry differs');}
         if (!activeStates.includes(previous.status) || previous.date !== input.date || previous.time !== input.time || previous.room !== input.room || result.master_id !== input.masterId || previous.name !== name || previous.phone !== phone || JSON.stringify(ids) !== JSON.stringify(previousIds)) throw failure(409, 'Booking retry differs');
         return result;
       }
@@ -212,7 +213,7 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
         .run(id, input.date, input.time, name, phone, ids[0], input.room, chosen.map(item => item.name).join(', '), min, max, min === max ? min : null, data.durationMinutes, chosen.length === 1 ? chosen[0].sessions : 1, input.requestKey, iso());
       await db.prepare('INSERT INTO ilker_booking_assignment(booking_id,master_id,master_name,room_id,room_name) VALUES(?,?,?,?,?)').run(id, master.id, masterLabel(master), master.room_id, master.room_name || null);
       await writeItems(id, chosen);
-      await onBooked(id,{internal,actor});
+      await onBooked(id,{internal,actor,reminder:input.reminder});
       await audit(actor, 'book', 'booking', id, {masterId: master.id, serviceIds: ids, date: input.date, time: input.time, min, max, duration: data.durationMinutes});
       return publicResult(await db.prepare('SELECT * FROM ilker_appointments WHERE id=?').get(id));
     });

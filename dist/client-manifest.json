@@ -10,8 +10,23 @@
   "theme_color": "#101110",
   "description": "İlker Sevim Barber Club onlayn rezervasiya",
   "icons": [
-    { "src": "/icons/ilker-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icons/ilker-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icons/ilker-maskable.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
+    {
+      "src": "/icons/ilker-app-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/ilker-app-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/ilker-app-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

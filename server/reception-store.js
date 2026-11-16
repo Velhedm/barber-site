@@ -200,6 +200,7 @@ async function createReceptionStore(db,base,{now=()=>Date.now(),onChange=async()
    const row=await db.prepare('SELECT * FROM ilker_clients WHERE id=?').get(input.id);if(!row)throw failure(404,'Client not found');
    if(row.anonymized)return {ok:true};revision(row,input.revision);
    if(await db.prepare("SELECT 1 FROM ilker_visit_state v JOIN ilker_appointments b ON b.id=v.booking_id WHERE v.client_id=? AND b.status IN ('active','arrived') LIMIT 1").get(input.id))throw failure(409,'Resolve active visits before anonymizing');
+   await db.prepare("UPDATE ilker_reminder_consent SET email='',revoked_at=? WHERE booking_id IN (SELECT booking_id FROM ilker_visit_state WHERE client_id=?)").run(now(),input.id);
    await db.prepare("UPDATE ilker_appointments SET name='Клиент удалён',phone='' WHERE id IN (SELECT booking_id FROM ilker_visit_state WHERE client_id=?)").run(input.id);
    await db.prepare("UPDATE ilker_visit_state SET notes='',revision=revision+1 WHERE client_id=?").run(input.id);
    await db.prepare("UPDATE ilker_clients SET name='Клиент удалён',phone='',phone_key=NULL,notes='',anonymized=1,revision=revision+1 WHERE id=?").run(input.id);

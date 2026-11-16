@@ -133,7 +133,7 @@
   async function initialize(){
     $('#retry-load').disabled=true;
     try{
-      const meta=await api('/api/meta');if(meta.brand!=='İlker Sevim Barber Club')throw new Error('Brand catalog is not ready');state.management=Boolean(meta.management);state.offset=meta.serverTime-Date.now();state.hours=meta.hours;state.services=meta.services;state.selectedIds=meta.services.length?[meta.services[0].id]:[];state.maxDays=meta.maxDaysAhead;state.ready=true;
+      const meta=await api('/api/meta');if(meta.brand!=='İlker Sevim Barber Club')throw new Error('Brand catalog is not ready');state.management=Boolean(meta.management);$('#reminder-fields').hidden=!meta.remindersEnabled;state.offset=meta.serverTime-Date.now();state.hours=meta.hours;state.services=meta.services;state.selectedIds=meta.services.length?[meta.services[0].id]:[];state.maxDays=meta.maxDaysAhead;state.ready=true;
       renderServices();await refreshMasters();$('#service').disabled=false;
       $('#load-error').hidden=true;state.month=localDay().slice(0,7);selectDate(localDay());
     }catch{
@@ -146,10 +146,12 @@
     if(name.length<2||/[\u0000-\u001f]/.test(name)){showError('Укажи имя — минимум 2 символа.');$('#customer-name').focus();return;}
     const digits=phone.replace(/\D/g,'');if(!/^\+?[0-9() .-]+$/.test(phone)||digits.length<7||digits.length>15){showError('Проверь номер телефона, например +994 10 321 51 51.');$('#customer-phone').focus();return;}
     if(!state.ready||!state.online||!state.date||!state.time||!state.selectedIds?.length||(state.management&&!state.masterId)||(!state.uncertain&&!free(state.time))){showError('Выбери доступную дату и свободное время.');return;}
-    const payload={name,phone,date:state.date,time:state.time,serviceIds:[...state.selectedIds],room:state.room,...(state.management?{masterId:state.masterId,expectedQuote:{min:Math.round(selectedServices().reduce((n,s)=>n+(typeof s.prices[state.room]==='number'?s.prices[state.room]:s.prices[state.room].min),0)*100),max:Math.round(selectedServices().reduce((n,s)=>n+(typeof s.prices[state.room]==='number'?s.prices[state.room]:s.prices[state.room].max),0)*100),duration:state.availability?.durationMinutes}}: {})};const serialized=JSON.stringify(payload);
+    if(!$('#reminder-fields').hidden&&$('#reminder-consent').checked&&!$('#customer-email').value.trim()){showError('Invalid reminder consent');$('#customer-email').focus();return;}
+    const priorReminder=state.uncertain&&state.payload?JSON.parse(state.payload).reminder:null;
+    const payload={name,phone,...(!$('#reminder-fields').hidden&&$('#reminder-consent').checked?{reminder:{consent:true,email:$('#customer-email').value.trim(),language:priorReminder?.language||window.RTI18n.language}}:{}),date:state.date,time:state.time,serviceIds:[...state.selectedIds],room:state.room,...(state.management?{masterId:state.masterId,expectedQuote:{min:Math.round(selectedServices().reduce((n,s)=>n+(typeof s.prices[state.room]==='number'?s.prices[state.room]:s.prices[state.room].min),0)*100),max:Math.round(selectedServices().reduce((n,s)=>n+(typeof s.prices[state.room]==='number'?s.prices[state.room]:s.prices[state.room].max),0)*100),duration:state.availability?.durationMinutes}}: {})};const serialized=JSON.stringify(payload);
     if(serialized!==state.payload){state.payload=serialized;state.requestKey=crypto.randomUUID();}
     const bookedService={items:selectedServices(),quotedPrice:priceTotal(selectedServices()),room:state.room,durationMinutes:state.availability?.durationMinutes};state.submitting=true;loadSequence++;availabilityRequest?.abort();state.loading=false;
-    $('#booking-form').setAttribute('aria-busy','true');$('#confirm-booking').classList.add('is-loading');setMessage($('#submit-label'),'Подтверждаем…');$('#service').disabled=true;$('#customer-name').readOnly=true;$('#customer-phone').readOnly=true;renderServices();renderSlots();renderCalendar();updateSummary();
+    $('#booking-form').setAttribute('aria-busy','true');$('#confirm-booking').classList.add('is-loading');setMessage($('#submit-label'),'Подтверждаем…');$('#service').disabled=true;$('#customer-name').readOnly=true;$('#customer-phone').readOnly=true;$('#customer-email').readOnly=true;$('#reminder-consent').disabled=true;renderServices();renderSlots();renderCalendar();updateSummary();
     try{
       const result=await api('/api/bookings',{method:'POST',body:JSON.stringify({...payload,requestKey:state.requestKey})});
       state.confirmed=true;state.uncertain=false;$('#booking-layout').hidden=true;$('#booking-success').hidden=false;
@@ -160,7 +162,7 @@
       if(error.status===409){state.time='';state.availability=null;showError(error.message);if(error.message==='Quote changed'){try{const meta=await api('/api/meta');state.services=meta.services;state.selectedIds=state.selectedIds.filter(id=>meta.services.some(s=>s.id===id));renderServices();await refreshMasters();}catch{showError('Не удалось выполнить запрос.');}}}
       else showError(error.status?error.message:'Не удалось получить подтверждение. Нажми ещё раз с теми же данными — повторная отправка не создаст вторую запись.');
     }finally{
-      state.submitting=false;$('#booking-form').setAttribute('aria-busy','false');$('#confirm-booking').classList.remove('is-loading');setMessage($('#submit-label'),'Подтвердить запись');$('#service').disabled=!state.ready||state.uncertain;$('#customer-name').readOnly=state.uncertain;$('#customer-phone').readOnly=state.uncertain;
+      state.submitting=false;$('#booking-form').setAttribute('aria-busy','false');$('#confirm-booking').classList.remove('is-loading');setMessage($('#submit-label'),'Подтвердить запись');$('#service').disabled=!state.ready||state.uncertain;$('#customer-name').readOnly=state.uncertain;$('#customer-phone').readOnly=state.uncertain;$('#customer-email').readOnly=state.uncertain;$('#reminder-consent').disabled=state.uncertain;
       if(!state.confirmed){renderServices();renderCalendar();updateSummary();refreshSlots();}
     }
   });

@@ -6,7 +6,7 @@ test('PostgreSQL access: atomic credential import, shared sessions/revocation, r
  const config={databaseUrl:parsed.href,bootstrapLegacy:false,proxyUrl:process.env.HTTPS_PROXY};const control=await createDatabase(config),schema='ilker_access_test_'+randomUUID().replaceAll('-',''),runtimes=[];
  try{
   await control.exec('CREATE SCHEMA '+schema);parsed.searchParams.set('options','-c search_path='+schema);
-  const password='postgres-synthetic-owner',adminHash=await hashPassword(password),now=()=>Date.parse('2030-01-01T00:00:00Z');
+  let clock=Date.parse('2030-01-01T00:00:00Z');const password='postgres-synthetic-owner',adminHash=await hashPassword(password),now=()=>clock;
   const emails=[];const start=async first=>{const r=await createApp({...config,databaseUrl:parsed.href,management:true,migrateManagement:first,preMigrated:!first,production:false,adminHash,now,vapid:{},origin:'https://synthetic.invalid',recoveryKey:'a'.repeat(64),emailProvider:{configured:true,send:async mail=>emails.push(mail)}});runtimes.push(r);return r;};
   const a=await start(true),[b,c]=await Promise.all([start(false),start(false)]);assert.equal((await a.access.users('owner')).length,1);
   const owner=await a.access.login({password},'owner-ip','iPhone Safari');assert.equal((await b.access.session(owner.raw)).user.id,'owner');
@@ -28,5 +28,9 @@ test('PostgreSQL access: atomic credential import, shared sessions/revocation, r
   await b.recovery.consume(link(emails[0]));await c.recovery.request({email:'synthetic@example.invalid'});await Promise.all([a.drainEmail(),b.drainEmail()]);assert.equal(emails.length,2);
   const recovered=await Promise.allSettled([a,b,c].map(r=>r.recovery.consume({...link(emails[1]),newPassword:'postgres-recovered-owner'})));
   assert.equal(recovered.filter(r=>r.status==='fulfilled').length,1);assert.equal(await c.access.session(next.raw),null);
+  await a.shop.setDuration('haircut','zal',60);const master=(await a.shop.masters())[0];await a.shop.saveMaster({id:master.id,revision:master.revision,name:'',online:true,archived:false,stepMinutes:30,serviceIds:['haircut'],schedule:Array.from({length:7},()=>({closed:false,start:'09:00',end:'21:00',breaks:[]}))});
+  const reminderConfig=await a.reminders.settings();await a.reminders.saveSettings({revision:reminderConfig.revision,enabled:true,offsets:[120]},'owner');
+  await b.shop.book({name:'Synthetic client',phone:'+994500000113',date:'2030-01-02',time:'12:00',masterId:master.id,serviceIds:['haircut'],room:'zal',requestKey:randomUUID(),reminder:{consent:true,email:'client@example.invalid',language:'en'}});
+  clock=Date.parse('2030-01-02T06:00:01Z');await Promise.all([a.drainEmail(),b.drainEmail(),c.drainEmail()]);assert.equal(emails.length,3);assert.equal((await a.reminders.list()).filter(row=>row.state==='sent').length,1);
  }finally{await Promise.all(runtimes.map(r=>r.close()));await control.exec('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await control.close();}
 });

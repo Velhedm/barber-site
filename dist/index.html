@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#101110">
   <link rel="manifest" href="/client-manifest.json">
   <meta name="apple-mobile-web-app-title" content="İlker Sevim">
-  <link rel="apple-touch-icon" href="/assets/ilker-logo-temporary.png">
+  <link rel="apple-touch-icon" href="/icons/ilker-touch-180.png">
   <link rel="icon" href="/assets/ilker-logo-temporary.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,6 +45,7 @@
       <aside class="contact-card card" aria-labelledby="contacts-title"><div class="card-heading"><span class="step-number">03</span><h3 id="contacts-title">Əlaqə məlumatların</h3></div><form id="booking-form">
         <label class="input-label" for="customer-name">Ad<input id="customer-name" name="name" placeholder="Sənə necə müraciət edək?" required minlength="2" maxlength="80" autocomplete="given-name"></label>
         <label class="input-label" for="customer-phone">Telefon<input id="customer-phone" name="phone" type="tel" inputmode="tel" placeholder="+994 10 000 00 00" required maxlength="24" autocomplete="tel"></label>
+        <div id="reminder-fields" hidden><label class="input-label" for="customer-email">Email (istəyə bağlı)<input id="customer-email" name="email" type="email" maxlength="254" autocomplete="email"></label><label class="reminder-consent"><input id="reminder-consent" type="checkbox"> <span>Ziyarət barədə Email xatırlatmaları almağa razıyam.</span></label></div>
         <div class="visit-summary"><span class="summary-caption">SƏNİN ZİYARƏTİN</span><dl><div id="summary-master-row" hidden><dt>Мастер</dt><dd id="summary-master">—</dd></div><div><dt>Məkan</dt><dd id="summary-room">ZAL</dd></div><div><dt>Xidmət</dt><dd id="summary-service">—</dd></div><div><dt>Tarix</dt><dd id="summary-date">Seçilməyib</dd></div><div><dt>Saat</dt><dd id="summary-time">Seçilməyib</dd></div></dl><div class="summary-total"><span>Cəmi</span><strong id="summary-price">—</strong></div></div>
         <p id="form-error" class="form-error" role="alert" hidden></p><button id="confirm-booking" class="primary-button submit-button" type="submit" disabled><span id="submit-label">Rezervasiyanı təsdiqlə</span><span class="button-arrow" aria-hidden="true"><svg class="arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 19 19 5M5 5h14v14"/></svg></span><span class="spinner" aria-hidden="true"></span></button><p id="submit-hint" class="submit-hint">Tarixi və boş saatı seç</p><p class="privacy-note">Formanı göndərməklə ziyarətin təşkili üçün əlaqə və rezervasiya məlumatlarının İlker Sevim-ə ötürülməsinə razılıq verirsən.</p>
       </form></aside>

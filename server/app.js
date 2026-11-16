@@ -20,6 +20,7 @@ const {createReceptionStore}=require('./reception-store');
 const {migrateRecovery}=require('./recovery-migration');
 const {createRecoveryStore}=require('./recovery-store');
 const {createEmailProvider}=require('./email-provider');
+const {migrateReminders,createReminders}=require('./reminders');
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 function verifyPassword(password,hash){try{const [salt,key]=hash.split(':');const expected=Buffer.from(key,'hex');const actual=scryptSync(password,salt,64);return expected.length===actual.length&&timingSafeEqual(expected,actual);}catch{return false;}}
@@ -55,9 +56,10 @@ async function createApp(options={}){
 
  const management=options.management??(process.env.MANAGEMENT_ENABLED==='true');
  const changes=createPushChanges(db,{now,send:pushSend});
- let reception=null;
+ let reception=null,reminders=null;
  const onBooked=async (bookingId,context)=>{
   if(reception)await reception.linkCreated(bookingId,context);
+  if(reminders)await reminders.consent(bookingId,context.reminder);
   const eventId=randomUUID();await db.prepare('INSERT INTO push_events(id,booking_id,created_at) VALUES(?,?,?)').run(eventId,bookingId,now());
   const subscriptions=await db.prepare('SELECT id FROM push_subscriptions').all();
   for(const sub of subscriptions)await db.prepare('INSERT INTO push_deliveries(id,event_id,subscription_id) VALUES(?,?,?)').run(randomUUID(),eventId,sub.id);
@@ -66,7 +68,7 @@ async function createApp(options={}){
  if(management){
   if(options.migrateManagement&&!options.preMigrated){await migrateManagement(db);await migrateReception(db);}
   shop=await createManagementStore(db,shop,{now,onBooked});
-  reception=await createReceptionStore(db,shop,{now,onChange:changes.enqueue});shop=reception;
+  reception=await createReceptionStore(db,shop,{now,onChange:async(id,kind)=>{await changes.enqueue(id,kind);if(reminders){if(kind==='cancelled')await reminders.revoke(id);else await reminders.schedule(id);}}});shop=reception;
  }
  if(!options.preMigrated)await db.exec(`
  CREATE TABLE IF NOT EXISTS ilker_sessions(token_hash TEXT PRIMARY KEY,csrf TEXT NOT NULL,expires BIGINT NOT NULL);
@@ -81,6 +83,9 @@ async function createApp(options={}){
   if(options.migrateManagement&&!options.preMigrated)await migrateRecovery(db);
   const provider=options.emailProvider||createEmailProvider({key:process.env.RESEND_API_KEY,from:process.env.EMAIL_FROM});
   recovery=await createRecoveryStore(db,{now,access,audit:shop.audit,provider,key:options.recoveryKey??process.env.RECOVERY_TOKEN_KEY,origin});
+  if(options.migrateManagement&&!options.preMigrated)await migrateReminders(db);
+  if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=8').get())throw new Error('Reminder migration required');
+  reminders=createReminders(db,{now,provider,audit:shop.audit});
  }
  const hours=Array.from({length:12},(_,i)=>String(9+i).padStart(2,'0')+':00');
  const horizon=365;
@@ -105,7 +110,8 @@ async function createApp(options={}){
  app.get('/api/meta',async(req,res)=>{
   const rows=await shop.settings();const durations=Object.fromEntries(rows.map(row=>[row.id,row.duration_minutes]));
   const services=management?await shop.services():catalog.categories.flatMap(group=>group.services.map(item=>({id:item.id,name:item.name,translations:item.translations,group:group.id,groupName:group.name,groupTranslations:group.translations,prices:{zal:item.zal,vip:item.vip},durations:{zal:durations[item.id+':zal'],vip:durations[item.id+':vip']},zalNote:item.zal_note||null})));
-  res.json({management,brand:catalog.brand,serverTime:now(),timezone:'Asia/Baku',hours,services,notificationsEnabled:pushEnabled,maxDaysAhead:horizon});
+  const reminderConfig=management?await reminders.settings():null;
+  res.json({management,brand:catalog.brand,serverTime:now(),timezone:'Asia/Baku',hours,services,notificationsEnabled:pushEnabled,remindersEnabled:Boolean(reminderConfig?.enabled&&reminderConfig.providerConfigured),maxDaysAhead:horizon});
  });
  app.get('/api/availability',async(req,res)=>{
   const ids=typeof req.query.serviceIds==='string'?req.query.serviceIds.split(','):undefined;
@@ -165,6 +171,8 @@ async function createApp(options={}){
   app.get('/api/admin/users',auth,async(req,res)=>res.json({rows:await access.users(req.user.id)}));
   app.post('/api/admin/users',auth,sensitive,async(req,res)=>res.json(await access.saveUser(req.user.id,req.body)));
   app.get('/api/admin/audit',auth,limiter(20),async(req,res)=>res.json({rows:await access.events(req.user.id,req.query.offset)}));
+  app.get('/api/admin/reminders',auth,async(req,res)=>res.json({settings:await reminders.settings(),jobs:await reminders.list()}));
+  app.post('/api/admin/reminders',auth,async(req,res)=>res.json(await reminders.saveSettings(req.body,req.user.id)));
  }
  app.get('/api/admin/day',auth,async(req,res)=>{
   if(!validDate(req.query.date))return res.status(400).json({error:'Некорректная дата'});
@@ -286,6 +294,6 @@ async function createApp(options={}){
  app.get('/presentation{/:rest}',async(req,res)=>res.redirect('/'+(req.path.endsWith('/')?'':'')));
  app.use(express.static(path.join(__dirname,'../dist'),{index:'index.html'}));
  app.use((error,req,res,next)=>{if(error.status===400&&error.type==='entity.parse.failed')return res.status(400).json({error:'Некорректный JSON'});res.status(error.status||500).json({error:error.status?error.message:'Ошибка сервера. Повтори запрос с теми же данными.'});});
- return {app,db,shop,access,recovery,drainOutbox,drainEmail:()=>recovery?.drain(),close:()=>db.close()};
+ return {app,db,shop,access,recovery,reminders,drainOutbox,drainEmail:async()=>{await recovery?.drain();await reminders?.drain();},close:()=>db.close()};
 }
 module.exports={createApp,verifyPassword};

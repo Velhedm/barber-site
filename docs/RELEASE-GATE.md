@@ -19,7 +19,7 @@ Render auto-deploys the former; pushing there would publish unfinished functiona
 5. Run full unit/API/browser/two-instance PostgreSQL tests, then real iPhone PWA/Push checks.
 6. Assign historical unassigned bookings through the stage-2 reschedule action before
    enabling new masters. Unassigned active intervals intentionally block all masters.
-7. Explicit migrations 1–7 (masters, reception/CRM/finance, accounts, Push leases, change events, ordering and email recovery): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
+7. Explicit migrations 1–8 (masters, reception/CRM/finance, accounts, Push leases, change events, ordering, email recovery and reminders): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
    `node scripts/migrate-management.js --apply`. Then review/apply
    `migrations/management-grants.sql` with the database owner, never at app startup.
 8. Only when all release gates pass, deploy tested commit and enable `MANAGEMENT_ENABLED=true`.
@@ -123,3 +123,10 @@ excluded, and the recipient's language and privacy choice apply at delivery time
 later event for the same booking/device waits for an earlier event to be delivered.
 Provider responses can be lost, so exactly-once delivery cannot be guaranteed. System
 error alerts and real-device acceptance remain outstanding. The free server may sleep.
+
+## Reminders and icons (staged)
+
+Migration 8 adds opt-in email reminders, outbox leases, retries and owner settings.
+No production email provider has been configured; real delivery and recipient consent
+require validation. See reports/REMINDERS-RU.md. PNG icon files were generated from
+the agreed temporary reconstruction; verify the updated installed PWA on a real iPhone.

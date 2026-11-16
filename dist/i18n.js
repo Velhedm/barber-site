@@ -1,6 +1,10 @@
 'use strict';
 (() => {
  const dictionary = {
+ "Email (istəyə bağlı)":{"az":"Email (istəyə bağlı)","ru":"Email (необязательно)","en":"Email (optional)"},
+ "Ziyarət barədə Email xatırlatmaları almağa razıyam.":{"az":"Ziyarət barədə Email xatırlatmaları almağa razıyam.","ru":"Я согласен получать напоминания о визите по Email.","en":"I agree to receive visit reminders by email."},
+ "Invalid reminder consent":{"az":"Xatırlatma üçün düzgün Email daxil edin.","ru":"Укажите корректный Email для напоминаний.","en":"Enter a valid email address for reminders."},
+ "Reminders unavailable":{"az":"Email xatırlatmaları artıq mövcud deyil. Səhifəni yeniləyin.","ru":"Напоминания по Email сейчас недоступны. Обновите страницу.","en":"Email reminders are unavailable. Refresh the page."},
  "Отменить запись": {"ru":"Отменить запись","az":"Rezervasiyanı ləğv et","en":"Cancel booking"},
  "Сохраните ссылку: она позволит отменить запись до начала визита.": {"ru":"Сохраните ссылку: она позволит отменить запись до начала визита.","az":"Bu keçidi saxlayın: ziyarət başlamazdan əvvəl rezervasiyanı ləğv edə bilərsiniz.","en":"Save this link to cancel your booking before your visit."},
  "Quote changed": {"ru":"Цена или длительность услуги изменилась. Проверьте итог и выберите время ещё раз.","az":"Xidmətin qiyməti və ya müddəti dəyişib. Yekunu yoxlayın və vaxtı yenidən seçin.","en":"The price or duration changed. Review the total and select a time again."},
