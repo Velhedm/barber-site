@@ -18,7 +18,7 @@ Render auto-deploys the former; pushing there would publish unfinished functiona
 5. Run full unit/API/browser/two-instance PostgreSQL tests, then real iPhone PWA/Push checks.
 6. Assign historical unassigned bookings through the stage-2 reschedule action before
    enabling new masters. Unassigned active intervals intentionally block all masters.
-7. Explicit migrations 1 and 2 (masters, then reception/CRM/finance): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
+7. Explicit migrations 1, 2 and 3 (masters, reception/CRM/finance, accounts): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
    `node scripts/migrate-management.js --apply`. Then review/apply
    `migrations/management-grants.sql` with the database owner, never at app startup.
 8. Only when all release gates pass, deploy tested commit and enable `MANAGEMENT_ENABLED=true`.
@@ -43,3 +43,29 @@ PostgreSQL test requires `ILKER_TEST_DATABASE_URL` and matching
 it migrates that branch's copied Ilker tables and adds CRM links/opening balances, creates an isolated synthetic schema and
 removes that synthetic schema after the test. It must never run against production.
 No test should use production push credentials or real customer destinations.
+
+
+## Access migration (stage 3A)
+
+Run explicit migrations 1, 2 and 3 plus restricted grants before enabling management.
+Migration 3 adds account/session ownership and login throttling; it does not modify visits.
+On first management startup only, import the existing configured owner password hash
+and unexpired legacy sessions/device subscriptions. The initial login is `owner`.
+Subsequent starts must keep the database credential authoritative, including after a
+password change. Do not import the environment password again.
+
+Rehearse the transition on a copied branch and retain the prior credential privately
+until the owner has verified access. Do not print it in reports or logs.
+Password recovery email is not implemented yet and blocks final commercial release.
+
+CRITICAL ROLLBACK: after a database password change, reverting to the legacy binary
+would accept the old environment password. Do not roll back to legacy authentication.
+A rollback must retain the access module and its tables, or pause access while restoring
+a vetted version. Never reset passwords or erase sessions silently to make rollback work.
+
+User role changes and deactivation revoke sessions and Push subscriptions. A request
+already authorized before revocation is revalidated inside its write transaction.
+Reception can read individual visit prices and client spending for its daily work, but
+cannot access aggregate finance routes, corrections, staff credentials, catalog edits,
+customer anonymization or audit exports. Final owner acceptance of this permission
+matrix is still required before provisioning real receptionist accounts.

@@ -26,7 +26,7 @@ Deleting cancelled bookings currently deletes historical data. Must become archi
 2. **Reception / CRM / finance** — implemented as stage 2, pending final release gates (6–9)
    Dashboard; day/week/month; manual entry, reschedule, attendance, no-show,
    customer normalization/history/anonymization, financial ledger and audit.
-3. **Access / communication / PWA** (5, 10–16)
+3. **Access / communication / PWA** (5, 10–16) — account access implemented as stage 3A; communication/recovery/localization/PWA still pending
    Owner/reception accounts, permission matrix, credential migration and revocation,
    password reset via configured email; consent-aware durable reminders; localized
    event outbox; full admin RU/AZ/EN; private lock-screen notifications; PWA scope,
@@ -58,6 +58,6 @@ SMS/WhatsApp/email credentials and costs are separate from Web Push.
 
 See `reports/STAGE-1-RU.md`, `reports/VALIDATION.md` and `RELEASE-GATE.md`.
 Rescheduling, reception, CRM and the financial ledger are implemented in stage 2.
-See `reports/STAGE-2-RU.md`. Personal cancellation links, account roles, communication,
+See `reports/STAGE-2-RU.md` and `reports/STAGE-3A-RU.md`. Account roles, password changes and session revocation are implemented. Personal cancellation links, recovery email, communication,
 full admin localization, PWA updates and release verification remain pending in stages 3–4.
 No claim of completed commercial delivery is made for this branch.

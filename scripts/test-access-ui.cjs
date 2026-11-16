@@ -1,0 +1,23 @@
+'use strict';
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright-core');
+const assert=require('node:assert/strict');
+const {createApp}=require('../server/app');
+const {hashPassword}=require('../server/access-store');
+(async()=>{
+ const password='local-test-password-only';
+ const runtime=await createApp({databaseUrl:'',databasePath:':memory:',management:true,migrateManagement:true,production:false,adminHash:await hashPassword(password),vapid:{}});
+ const server=runtime.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;let browser;
+ try{
+  browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(base+'/admin.html');await page.locator('#login input[name=password]').fill(password);await page.locator('#login button').click();await page.locator('#tab-settings').click();
+  await page.getByRole('button',{name:'+ Добавить сотрудника',exact:true}).click();const dialog=page.locator('dialog[open]');
+  await dialog.getByLabel('Имя сотрудника',{exact:true}).fill('Synthetic Reception');await dialog.getByLabel('Логин',{exact:true}).fill('reception-ui');await dialog.getByLabel('Пароль сотрудника',{exact:true}).fill('test-reception-password');await dialog.getByLabel('Ваш текущий пароль',{exact:true}).fill(password);await dialog.getByRole('button',{name:'Сохранить доступ',exact:true}).click();await dialog.waitFor({state:'detached'});
+  await page.getByLabel('Язык Push-уведомлений',{exact:true}).selectOption('en');await page.getByRole('button',{name:'Сохранить уведомления',exact:true}).click();await page.getByText('Настройки сохранены.',{exact:true}).waitFor();
+  for(const width of [360,390,1440]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}
+  const staffPage=await (await browser.newContext({viewport:{width:390,height:844}})).newPage();staffPage.on('pageerror',e=>errors.push(e.message));await staffPage.goto(base+'/admin.html');await staffPage.locator('#login input[name=login]').fill('reception-ui');await staffPage.locator('#login input[name=password]').fill('test-reception-password');await staffPage.locator('#login button').click();await staffPage.locator('#home-view').waitFor();assert.equal(await staffPage.locator('#tab-revenue').isVisible(),false);assert.equal(await staffPage.locator('#tab-services').isVisible(),false);await staffPage.locator('#tab-settings').click();await staffPage.getByRole('button',{name:'Изменить пароль',exact:true}).waitFor();assert.equal(await staffPage.getByRole('button',{name:'+ Добавить сотрудника',exact:true}).count(),0);
+  const forbidden=await staffPage.evaluate(async()=>{const response=await fetch('/api/admin/users');return response.status;});assert.equal(forbidden,403);
+  await page.getByRole('button',{name:'Изменить пароль',exact:true}).click();await dialog.getByLabel('Ваш текущий пароль',{exact:true}).fill(password);await dialog.getByLabel('Новый пароль',{exact:true}).fill('updated-test-owner-password');await dialog.getByLabel('Повторите новый пароль',{exact:true}).fill('updated-test-owner-password');await dialog.getByRole('button',{name:'Изменить пароль',exact:true}).click();await page.locator('#login').waitFor();assert.equal(await page.locator('#settings-view').textContent(),'');
+  await page.locator('#login input[name=password]').fill('updated-test-owner-password');await page.locator('#login button').click();await page.locator('#home-view').waitFor();await page.locator('#tab-settings').click();await page.getByLabel('Язык Push-уведомлений',{exact:true}).waitFor();assert.equal(await page.getByLabel('Язык Push-уведомлений',{exact:true}).inputValue(),'en');assert.deepEqual(errors,[]);
+  console.log('PASS: account creation, reception UI/server restrictions, password rotation, new login, persisted Push language, 360/390/1440 widths, no JS errors');
+ }finally{if(browser)await browser.close();await new Promise(r=>server.close(r));await runtime.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

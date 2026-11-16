@@ -1,5 +1,8 @@
 'use strict';
 const express=require('express');
+const {AsyncLocalStorage}=require('node:async_hooks');
+const {createAccessStore}=require('./access-store');
+const {migrateAccess}=require('./access-migration');
 const helmet=require('helmet');
 const {rateLimit}=require('express-rate-limit');
 const {createDatabase}=require('./database');
@@ -27,7 +30,12 @@ async function createApp(options={}){
  // remains fail-closed until PostgreSQL privilege separation and migration are verified.
  const names={slots:'ilker_appointments',closed_days:'ilker_closed_days',sessions:'ilker_sessions',push_subscriptions:'ilker_push_subscriptions',push_events:'ilker_push_events',push_deliveries:'ilker_push_deliveries'};
  const scope=sql=>sql.replace(/\b(push_subscriptions|push_deliveries|push_events|closed_days|sessions|slots)\b/g,name=>names[name]);
- const db={...rawdb,prepare:sql=>rawdb.prepare(scope(sql))};
+ const requestAccess=new AsyncLocalStorage();
+ const db={...rawdb,prepare:sql=>rawdb.prepare(scope(sql)),transaction:fn=>rawdb.transaction(async()=>{
+  const guard=requestAccess.getStore();
+  if(guard){const live=await rawdb.prepare('SELECT u.role FROM ilker_users u JOIN ilker_account_sessions a ON a.user_id=u.id JOIN ilker_sessions s ON s.token_hash=a.token_hash WHERE u.id=? AND u.active=1 AND a.token_hash=? AND s.expires>?').get(guard.userId,guard.token,now());if(!live||live.role!==guard.role)throw Object.assign(new Error('Сессия завершена. Войдите снова.'),{status:401});}
+  return fn();
+ })};
  const production=options.production??(process.env.NODE_ENV==='production');
  const vapid=options.vapid||{subject:process.env.VAPID_SUBJECT,publicKey:process.env.VAPID_PUBLIC_KEY,privateKey:process.env.VAPID_PRIVATE_KEY};
  const pushEnabled=Boolean(vapid.subject&&vapid.publicKey&&vapid.privateKey);
@@ -60,6 +68,8 @@ async function createApp(options={}){
  CREATE TABLE IF NOT EXISTS ilker_push_events(id TEXT PRIMARY KEY,booking_id TEXT NOT NULL UNIQUE REFERENCES ilker_appointments(id) ON DELETE CASCADE,created_at BIGINT NOT NULL);
  CREATE TABLE IF NOT EXISTS ilker_push_deliveries(id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES ilker_push_events(id) ON DELETE CASCADE,subscription_id TEXT NOT NULL REFERENCES ilker_push_subscriptions(id) ON DELETE CASCADE,attempts INTEGER NOT NULL DEFAULT 0,next_attempt BIGINT NOT NULL DEFAULT 0,sent_at BIGINT,last_error TEXT,UNIQUE(event_id,subscription_id));
  `);
+ let access=null;
+ if(management){if(options.migrateManagement&&!options.preMigrated)await migrateAccess(db);access=await createAccessStore(db,{now,bootstrapHash:adminHash,audit:shop.audit});}
  const hours=Array.from({length:12},(_,i)=>String(9+i).padStart(2,'0')+':00');
  const horizon=365;
  function today(){return new Date(now()+4*3600000).toISOString().slice(0,10);}
@@ -92,19 +102,48 @@ async function createApp(options={}){
  app.post('/api/bookings',limiter(options.bookingLimit||12,10*60000),async(req,res)=>{
   const booking=await shop.book(req.body);res.status(201).json({id:booking.id,date:booking.date,time:booking.time,serviceId:booking.service_id,room:booking.room,durationMinutes:booking.duration_minutes,status:'confirmed',...(management?{masterId:booking.master_id,masterName:booking.master_name,priceMin:booking.price_min,priceMax:booking.price_max,items:booking.items}: {})});
  });
+ const receptionRoutes=new Set([
+  'GET /api/admin/session','POST /api/admin/logout','GET /api/admin/day','POST /api/admin/day','POST /api/admin/slot',
+  'POST /api/admin/availability','POST /api/admin/bookings/create','POST /api/admin/bookings/reschedule','POST /api/admin/bookings/status','POST /api/admin/bookings/comment',
+  'GET /api/admin/dashboard','GET /api/admin/clients','POST /api/admin/clients/save','GET /api/admin/management',
+  'POST /api/admin/master-exception','POST /api/admin/master-block','GET /api/admin/master-day','POST /api/admin/cancel',
+  'GET /api/admin/services','POST /api/admin/price','POST /api/admin/complete','GET /api/admin/bookings',
+  'GET /api/admin/push/config','POST /api/admin/push/subscribe','POST /api/admin/push/unsubscribe','POST /api/admin/push/test',
+  'GET /api/admin/account','GET /api/admin/account/sessions','POST /api/admin/account/password','POST /api/admin/account/preferences','POST /api/admin/account/revoke'
+ ]);
  async function auth(req,res,next){const cookie=req.get('cookie')||'';const sessionToken=cookie.split(';').map(x=>x.trim()).find(x=>x.startsWith('rt_session='))?.slice(11);
-  const session=sessionToken&&(await db.prepare('SELECT * FROM sessions WHERE token_hash=? AND expires>?').get(sha(sessionToken),now()));
+  const session=access?await access.session(sessionToken):sessionToken&&(await db.prepare('SELECT * FROM sessions WHERE token_hash=? AND expires>?').get(sha(sessionToken),now()));
   if(!session)return res.status(401).json({error:'Нужен вход владельца'});
-  if(req.method!=='GET'&&req.get('x-csrf-token')!==session.csrf)return res.status(403).json({error:'Неверный CSRF-токен'});req.session=session;next();
+  if(req.method!=='GET'&&req.get('x-csrf-token')!==session.csrf)return res.status(403).json({error:'Неверный CSRF-токен'});
+  req.session=session;req.user=session.user||{id:'owner',role:'owner'};
+  if(access&&req.user.role!=='owner'&&!receptionRoutes.has(req.method+' '+req.path)&&!(req.method==='GET'&&/^\/api\/admin\/booking\/[^/]+$/.test(req.path)))return res.status(403).json({error:'Недостаточно прав.'});
+  if(access)return requestAccess.run({userId:req.user.id,role:req.user.role,token:session.token_hash},next);next();
  }
- app.post('/api/admin/login',limiter(5,15*60000),async(req,res)=>{
+ const cookieOptions={httpOnly:true,sameSite:'strict',secure:production,path:'/api/admin'};
+ app.post('/api/admin/login',limiter(access?30:5,15*60000),async(req,res)=>{
+  if(access){const result=await access.login(req.body,req.ip,req.get('user-agent'));return res.cookie('rt_session',result.raw,{...cookieOptions,maxAge:8*3600000}).json({csrf:result.csrf,user:result.user});}
   if(!adminHash)return res.status(503).json({error:'Настрой ADMIN_PASSWORD_HASH'});
   const password=req.body.password;if(typeof password!=='string'||password.length>200||!verifyPassword(password,adminHash))return res.status(401).json({error:'Неверный пароль'});
-  (await db.prepare('DELETE FROM sessions WHERE expires<=?').run(now()));const raw=randomBytes(32).toString('hex');const csrf=randomBytes(24).toString('hex');(await db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(sha(raw),csrf,now()+8*3600000));
-  res.cookie('rt_session',raw,{httpOnly:true,sameSite:'strict',secure:production,maxAge:8*3600000,path:'/api/admin'}).json({csrf});
+  await db.prepare('DELETE FROM sessions WHERE expires<=?').run(now());const raw=randomBytes(32).toString('hex');const csrf=randomBytes(24).toString('hex');await db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(sha(raw),csrf,now()+8*3600000);
+  res.cookie('rt_session',raw,{...cookieOptions,maxAge:8*3600000}).json({csrf});
  });
- app.get('/api/admin/session',auth,async(req,res)=>res.json({csrf:req.session.csrf}));
- app.post('/api/admin/logout',auth,async(req,res)=>{if(typeof req.body.endpoint==='string')(await db.prepare('DELETE FROM push_subscriptions WHERE endpoint=?').run(req.body.endpoint));(await db.prepare('DELETE FROM sessions WHERE token_hash=?').run(req.session.token_hash));res.clearCookie('rt_session',{path:'/api/admin',httpOnly:true,sameSite:'strict',secure:production}).json({ok:true});});
+ app.get('/api/admin/session',auth,async(req,res)=>res.json({csrf:req.session.csrf,...(access?{user:req.user}:{})}));
+ app.post('/api/admin/logout',auth,async(req,res)=>{
+  if(access){const result=await access.logout(req.user.id,req.session.token_hash,req.body.endpoint);return res.clearCookie('rt_session',cookieOptions).json(result);}
+  if(typeof req.body.endpoint==='string')await db.prepare('DELETE FROM push_subscriptions WHERE endpoint=?').run(req.body.endpoint);
+  await db.prepare('DELETE FROM sessions WHERE token_hash=?').run(req.session.token_hash);res.clearCookie('rt_session',cookieOptions).json({ok:true});
+ });
+ if(access){
+  const sensitive=limiter(30,15*60000);
+  app.get('/api/admin/account',auth,async(req,res)=>res.json({user:req.user}));
+  app.get('/api/admin/account/sessions',auth,async(req,res)=>res.json({rows:await access.devices(req.user.id,req.session.token_hash)}));
+  app.post('/api/admin/account/password',auth,sensitive,async(req,res)=>{const result=await access.changePassword(req.user.id,req.body);res.clearCookie('rt_session',cookieOptions).json(result);});
+  app.post('/api/admin/account/preferences',auth,async(req,res)=>res.json({user:await access.preferences(req.user.id,req.body)}));
+  app.post('/api/admin/account/revoke',auth,sensitive,async(req,res)=>{const result=await access.endSessions(req.user.id,req.body,req.session.token_hash);if(result.signInRequired)res.clearCookie('rt_session',cookieOptions);res.json(result);});
+  app.get('/api/admin/users',auth,async(req,res)=>res.json({rows:await access.users(req.user.id)}));
+  app.post('/api/admin/users',auth,sensitive,async(req,res)=>res.json(await access.saveUser(req.user.id,req.body)));
+  app.get('/api/admin/audit',auth,limiter(20),async(req,res)=>res.json({rows:await access.events(req.user.id,req.query.offset)}));
+ }
  app.get('/api/admin/day',auth,async(req,res)=>{
   if(!validDate(req.query.date))return res.status(400).json({error:'Некорректная дата'});
   const rows=await db.prepare(management?"SELECT * FROM slots WHERE date=? AND status IN ('active','arrived') ORDER BY time":"SELECT * FROM slots WHERE date=? AND status='active' ORDER BY time").all(req.query.date);
@@ -114,34 +153,34 @@ async function createApp(options={}){
  if(management){
   // All reception operations inherit the same authentication, CSRF and origin checks.
   app.post('/api/admin/availability',auth,async(req,res)=>res.json(await shop.adminAvailability(req.body)));
-  app.post('/api/admin/bookings/create',auth,async(req,res)=>res.status(201).json(await shop.book(req.body,{internal:true,actor:'owner'})));
-  app.post('/api/admin/bookings/reschedule',auth,async(req,res)=>res.json(await shop.reschedule(req.body)));
-  app.post('/api/admin/bookings/status',auth,async(req,res)=>res.json(await shop.setStatus(req.body)));
-  app.post('/api/admin/bookings/comment',auth,async(req,res)=>res.json(await shop.comment(req.body)));
-  app.get('/api/admin/dashboard',auth,async(req,res)=>res.json(await shop.dashboard(req.query.date)));
+  app.post('/api/admin/bookings/create',auth,async(req,res)=>res.status(201).json(await shop.book(req.body,{internal:true,actor:req.user.id})));
+  app.post('/api/admin/bookings/reschedule',auth,async(req,res)=>res.json(await shop.reschedule(req.body,req.user.id)));
+  app.post('/api/admin/bookings/status',auth,async(req,res)=>res.json(await shop.setStatus(req.body,req.user.id)));
+  app.post('/api/admin/bookings/comment',auth,async(req,res)=>res.json(await shop.comment(req.body,req.user.id)));
+  app.get('/api/admin/dashboard',auth,async(req,res)=>{const data=await shop.dashboard(req.query.date);if(req.user.role!=='owner')delete data.revenueMinor;res.json(data);});
   app.get('/api/admin/clients',auth,limiter(40),async(req,res)=>res.json(await shop.clients(req.query)));
-  app.post('/api/admin/clients/save',auth,async(req,res)=>res.json(await shop.saveClient(req.body)));
-  app.post('/api/admin/clients/anonymize',auth,async(req,res)=>res.json(await shop.anonymizeClient(req.body)));
+  app.post('/api/admin/clients/save',auth,async(req,res)=>res.json(await shop.saveClient(req.body,req.user.id)));
+  app.post('/api/admin/clients/anonymize',auth,async(req,res)=>res.json(await shop.anonymizeClient(req.body,req.user.id)));
   app.get('/api/admin/finance',auth,async(req,res)=>res.json(await shop.finance(req.query)));
-  app.post('/api/admin/finance/adjust',auth,async(req,res)=>res.json(await shop.adjustFinance(req.body)));
+  app.post('/api/admin/finance/adjust',auth,async(req,res)=>res.json(await shop.adjustFinance(req.body,req.user.id)));
   app.get('/api/admin/finance/history/:id',auth,async(req,res)=>res.json({rows:await shop.ledgerHistory(req.params.id)}));
   app.get('/api/masters',async(req,res)=>res.json({masters:await shop.eligible({serviceIds:typeof req.query.serviceIds==='string'?req.query.serviceIds.split(','):[],room:req.query.room})}));
   app.get('/api/admin/management',auth,async(req,res)=>res.json({masters:await shop.masters(true),rooms:await shop.rooms(),services:await shop.services(true)}));
-  app.post('/api/admin/masters',auth,async(req,res)=>res.json(await shop.saveMaster(req.body)));
-  app.post('/api/admin/rooms',auth,async(req,res)=>res.json(await shop.saveRoom(req.body)));
-  app.post('/api/admin/catalog',auth,async(req,res)=>res.json(await shop.saveService(req.body)));
-  app.post('/api/admin/master-exception',auth,async(req,res)=>res.json(await shop.setException(req.body)));
-  app.post('/api/admin/master-block',auth,async(req,res)=>res.json(await shop.setBlock(req.body)));
+  app.post('/api/admin/masters',auth,async(req,res)=>res.json(await shop.saveMaster(req.body,req.user.id)));
+  app.post('/api/admin/rooms',auth,async(req,res)=>res.json(await shop.saveRoom(req.body,req.user.id)));
+  app.post('/api/admin/catalog',auth,async(req,res)=>res.json(await shop.saveService(req.body,req.user.id)));
+  app.post('/api/admin/master-exception',auth,async(req,res)=>res.json(await shop.setException(req.body,req.user.id)));
+  app.post('/api/admin/master-block',auth,async(req,res)=>res.json(await shop.setBlock(req.body,req.user.id)));
   app.get('/api/admin/master-day',auth,async(req,res)=>res.json(await shop.dayDetails(req.query.masterId,req.query.date)));
   app.get('/api/admin/master-history',auth,async(req,res)=>res.json(await shop.history(req.query.masterId,Number(req.query.offset||0))));
  }
- app.post('/api/admin/slot',auth,async(req,res)=>res.json(await shop.setSlot(req.body.date,req.body.time,req.body.blocked,req.body.masterId)));
- app.post('/api/admin/day',auth,async(req,res)=>res.json(await shop.setDay(req.body.date,req.body.closed,req.body.masterId)));
- app.post('/api/admin/cancel',auth,async(req,res)=>res.json(await shop.cancel(req.body.id)));
+ app.post('/api/admin/slot',auth,async(req,res)=>res.json(await shop.setSlot(req.body.date,req.body.time,req.body.blocked,req.body.masterId,req.user.id)));
+ app.post('/api/admin/day',auth,async(req,res)=>res.json(await shop.setDay(req.body.date,req.body.closed,req.body.masterId,req.user.id)));
+ app.post('/api/admin/cancel',auth,async(req,res)=>res.json(await shop.cancel(req.body.id,req.user.id)));
  app.get('/api/admin/services',auth,async(req,res)=>res.json({services:await shop.settings()}));
- app.post('/api/admin/duration',auth,async(req,res)=>res.json(await shop.setDuration(req.body.serviceId,req.body.room,req.body.minutes)));
- app.post('/api/admin/price',auth,async(req,res)=>res.json(await shop.setActualPrice(req.body.id,req.body.price)));
- app.post('/api/admin/complete',auth,async(req,res)=>res.json(await shop.complete(req.body.id)));
+ app.post('/api/admin/duration',auth,async(req,res)=>res.json(await shop.setDuration(req.body.serviceId,req.body.room,req.body.minutes,req.user.id)));
+ app.post('/api/admin/price',auth,async(req,res)=>res.json(await shop.setActualPrice(req.body.id,req.body.price,req.user.id)));
+ app.post('/api/admin/complete',auth,async(req,res)=>res.json(await shop.complete(req.body.id,req.user.id)));
  app.get('/api/admin/revenue',auth,async(req,res)=>res.json(await shop.revenue()));
  function validSubscription(subscription){
   try{const url=new URL(subscription.endpoint);const host=url.hostname.toLowerCase();
@@ -149,22 +188,23 @@ async function createApp(options={}){
    return allowed&&url.protocol==='https:'&&!url.username&&!url.password&&!url.port&&subscription.endpoint.length<2048&&/^[A-Za-z0-9_-]{87}$/.test(subscription.keys?.p256dh||'')&&/^[A-Za-z0-9_-]{22}$/.test(subscription.keys?.auth||'');
   }catch{return false;}
  }
- app.get('/api/admin/push/config',auth,async(req,res)=>res.json({enabled:pushEnabled,publicKey:pushEnabled?vapid.publicKey:null,deviceCount:(await db.prepare('SELECT count(*) AS n FROM push_subscriptions').get()).n}));
+ app.get('/api/admin/push/config',auth,async(req,res)=>res.json({enabled:pushEnabled,publicKey:pushEnabled?vapid.publicKey:null,deviceCount:access?await access.deviceCount(req.user.id):(await db.prepare('SELECT count(*) AS n FROM push_subscriptions').get()).n}));
  app.post('/api/admin/push/subscribe',auth,async(req,res)=>{
   if(!pushEnabled)return res.status(503).json({error:'Настрой VAPID на сервере'});
   if(!validSubscription(req.body.subscription))return res.status(400).json({error:'Недопустимая Push-подписка'});
   const subscription=req.body.subscription;
   const safe={endpoint:subscription.endpoint,expirationTime:subscription.expirationTime||null,keys:{p256dh:subscription.keys.p256dh,auth:subscription.keys.auth}};
   if(safe.expirationTime&&(!Number.isFinite(safe.expirationTime)||safe.expirationTime<now()))return res.status(400).json({error:'Подписка истекла'});
+  if(access)return res.json(await access.subscribe(req.user.id,safe,req.session.token_hash));
   if(!(await db.prepare('SELECT 1 FROM push_subscriptions WHERE endpoint=?').get(safe.endpoint))&&(await db.prepare('SELECT count(*) AS n FROM push_subscriptions').get()).n>=20)return res.status(409).json({error:'Достигнут лимит 20 устройств'});
   (await db.prepare('INSERT INTO push_subscriptions(id,endpoint,subscription,created_at) VALUES(?,?,?,?) ON CONFLICT(endpoint) DO UPDATE SET subscription=excluded.subscription').run(randomUUID(),safe.endpoint,JSON.stringify(safe),now()));
   res.json({ok:true});
  });
- app.post('/api/admin/push/unsubscribe',auth,async(req,res)=>{if(typeof req.body.endpoint!=='string')return res.status(400).json({error:'Нужна подписка'});(await db.prepare('DELETE FROM push_subscriptions WHERE endpoint=?').run(req.body.endpoint));res.json({ok:true});});
+ app.post('/api/admin/push/unsubscribe',auth,async(req,res)=>{if(typeof req.body.endpoint!=='string')return res.status(400).json({error:'Нужна подписка'});if(access)await access.unsubscribe(req.user.id,req.body.endpoint);else await db.prepare('DELETE FROM push_subscriptions WHERE endpoint=?').run(req.body.endpoint);res.json({ok:true});});
  app.post('/api/admin/push/test',auth,limiter(3,60000),async(req,res)=>{
-  const row=(await db.prepare('SELECT * FROM push_subscriptions WHERE endpoint=?').get(typeof req.body.endpoint==='string'?req.body.endpoint:''));
+  const row=access?await access.ownsPush(req.user.id,req.body.endpoint||''):await db.prepare('SELECT * FROM push_subscriptions WHERE endpoint=?').get(typeof req.body.endpoint==='string'?req.body.endpoint:'');
   if(!pushEnabled||!row)return res.status(400).json({error:'Сначала включи Push на этом устройстве'});
-  try{await pushSend(JSON.parse(row.subscription),JSON.stringify({title:'İlker Sevim Barber Club',body:'Проверка Push-уведомлений',tag:'rt-test',url:'/admin.html'}));res.json({ok:true});}
+  try{await pushSend(JSON.parse(row.subscription),JSON.stringify({title:'İlker Sevim Barber Club',body:({ru:'Проверка Push-уведомлений',az:'Push bildirişinin yoxlanılması',en:'Push notification test'}[req.user.language]||'Проверка Push-уведомлений'),tag:'rt-test',url:'/admin.html'}));res.json({ok:true});}
   catch(e){if([404,410].includes(e.statusCode))(await db.prepare('DELETE FROM push_subscriptions WHERE id=?').run(row.id));res.status(502).json({error:'Push-сервис не принял сообщение. Проверь подписку и настройки.'});}
  });
  app.get('/api/admin/bookings',auth,async(req,res)=>{
@@ -185,7 +225,7 @@ async function createApp(options={}){
   const row=(await db.prepare("SELECT id,date,time,status,name,phone,service_id,service_name,room,price_min,price_max,actual_price,duration_minutes,sessions_count,created_at FROM slots WHERE id=? AND kind='booking'").get(req.params.id));
   if(!row)return res.status(404).json({error:'Запись не найдена'});res.json(management?await shop.publicResult(row):{...row,items:await shop.items(row.id)});
  });
- app.post('/api/admin/delete',auth,async(req,res)=>res.json(await shop.remove(req.body.id)));
+ app.post('/api/admin/delete',auth,async(req,res)=>res.json(await shop.remove(req.body.id,req.user.id)));
  let draining=false;
  async function drainOutbox(){if(draining||!pushEnabled)return;draining=true;try{
   const jobs=(await db.prepare("SELECT d.id AS delivery_id,d.attempts,p.subscription,p.id AS subscription_id,s.id AS booking_id,s.date,s.time,s.duration_minutes FROM push_deliveries d JOIN push_events e ON e.id=d.event_id JOIN slots s ON s.id=e.booking_id JOIN push_subscriptions p ON p.id=d.subscription_id WHERE d.sent_at IS NULL AND d.next_attempt<=? AND s.status='active' ORDER BY d.id LIMIT 20").all(now()));
@@ -193,7 +233,11 @@ async function createApp(options={}){
    if(!(await db.prepare('SELECT 1 FROM push_subscriptions WHERE id=?').get(job.subscription_id))||!(await db.prepare("SELECT 1 FROM slots WHERE id=? AND status='active'").get(job.booking_id)))continue;
    try{
     const minutes=Number(job.time.slice(0,2))*60+Number(job.time.slice(3))+job.duration_minutes;const end=String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(minutes%60).padStart(2,'0');
+    const recipient=access?await db.prepare('SELECT u.language,u.push_private FROM ilker_users u JOIN ilker_push_owners o ON o.user_id=u.id WHERE o.subscription_id=? AND u.active=1').get(job.subscription_id):null;
+    if(access&&!recipient)continue;
+    const texts={ru:['Новая запись','Откройте панель для деталей.'],az:['Yeni rezervasiya','Ətraflı məlumat üçün paneli açın.'],en:['New booking','Open the dashboard for details.']}[recipient?.language||'ru'];
     const payload={title:'Новая запись · İlker Sevim Barber Club',body:`${job.date}, ${job.time}–${end} · Баку. Открой панель для деталей.`,tag:'booking-'+job.booking_id,url:'/admin.html?booking='+job.booking_id};
+    if(recipient){payload.title=texts[0]+' · İlker Sevim';payload.body=recipient.push_private?texts[1]:`${job.date}, ${job.time}–${end} · ${texts[1]}`;}
     await pushSend(JSON.parse(job.subscription),JSON.stringify(payload));
     (await db.prepare('UPDATE push_deliveries SET sent_at=?,last_error=NULL WHERE id=?').run(now(),job.delivery_id));
    }catch(e){if([404,410].includes(e.statusCode)){(await db.prepare('DELETE FROM push_subscriptions WHERE id=?').run(job.subscription_id));continue;}
@@ -207,6 +251,6 @@ async function createApp(options={}){
  app.get('/presentation{/:rest}',async(req,res)=>res.redirect('/'+(req.path.endsWith('/')?'':'')));
  app.use(express.static(path.join(__dirname,'../dist'),{index:'index.html'}));
  app.use((error,req,res,next)=>{if(error.status===400&&error.type==='entity.parse.failed')return res.status(400).json({error:'Некорректный JSON'});res.status(error.status||500).json({error:error.status?error.message:'Ошибка сервера. Повтори запрос с теми же данными.'});});
- return {app,db,shop,drainOutbox,close:()=>db.close()};
+ return {app,db,shop,access,drainOutbox,close:()=>db.close()};
 }
 module.exports={createApp,verifyPassword};
