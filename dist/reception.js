@@ -14,7 +14,7 @@ window.IlkerReception=(()=>{
  function note(text){return el('p',text,'small-note');}
  async function catalog(){model=await api('/api/admin/management');return model;}
  function dialog(title){if(activeDialog)activeDialog.close();const d=el('dialog',undefined,'reception-dialog'),heading=el('div',undefined,'reception-dialog-heading'),form=el('form',undefined,'management-form');form.addEventListener('submit',e=>e.preventDefault());const problem=el('p',undefined,'reception-error');problem.role='alert';
-  heading.append(el('h2',title),button('Закрыть',()=>d.close()));d.append(heading,problem,form);d.dataset.private='true';document.body.append(d);d.addEventListener('close',()=>{d.remove();if(activeDialog===d)activeDialog=null;});d.showModal();activeDialog=d;
+  const headingTitle=el('h2',title),close=button('Закрыть',()=>d.close());window.IlkerAdminI18n?.bind(headingTitle,title);window.IlkerAdminI18n?.bind(close,'Закрыть');heading.append(headingTitle,close);d.append(heading,window.IlkerAdminI18n?.makeSwitcher()||el('span'),problem,form);d.dataset.private='true';document.body.append(d);d.addEventListener('close',()=>{d.remove();if(activeDialog===d)activeDialog=null;});d.showModal();activeDialog=d;
   return {d,form,problem};}
  function mutationControls(view,fields,action,build,onSuccess){
   let pending=null;const submit=button('Сохранить',async()=>{
@@ -33,9 +33,11 @@ window.IlkerReception=(()=>{
   if(existing){customer.input.readOnly=true;phone.input.readOnly=true;}
   const category=select('Категория',[['zal','ZAL'],['vip','VIP']],existing?.room||'zal'),when=field('Дата','date',existing?.date||date());when.input.min=date();when.input.max=shift(date(),365);when.input.required=true;
   const master=select('Мастер',[]),time=select('Время',[],existing?.time||'');master.input.required=time.input.required=true;
+  for(const [control,key]of [[customer,'Имя клиента'],[phone,'Телефон'],[category,'Категория'],[when,'Дата'],[master,'Мастер'],[time,'Время']]){window.IlkerAdminI18n?.bind(control.root,key);window.IlkerAdminI18n?.bind(control.input,key,'aria-label');}
   const grid=el('div',undefined,'management-grid');grid.append(customer.root,phone.root,category.root,when.root);controls.append(grid);
-  const serviceRoot=el('fieldset',undefined,'management-services');serviceRoot.append(el('legend','Услуги'));let selected=existing?(existing.items.length?existing.items.map(i=>i.service_id):[existing.service_id]):[];const checkboxes=[];
-  for(const service of model.services.filter(s=>!s.archived||selected.includes(s.id))){const label=el('label',undefined,'management-check'),input=el('input');input.type='checkbox';input.value=service.id;input.checked=selected.includes(service.id);label.append(input,document.createTextNode(service.translations.ru||service.name));serviceRoot.append(label);checkboxes.push(input);}
+  const serviceRoot=el('fieldset',undefined,'management-services'),serviceLegend=el('legend','Услуги');window.IlkerAdminI18n?.bind(serviceLegend,'Услуги');serviceRoot.append(serviceLegend);let selected=existing?(existing.items.length?existing.items.map(i=>i.service_id):[existing.service_id]):[];const checkboxes=[];
+  const serviceLabels=[];for(const service of model.services.filter(s=>!s.archived||selected.includes(s.id))){const label=el('label',undefined,'management-check'),input=el('input'),text=document.createTextNode('');input.type='checkbox';input.value=service.id;input.checked=selected.includes(service.id);label.append(input,text);serviceRoot.append(label);checkboxes.push(input);serviceLabels.push({service,text});}
+  const translateServices=()=>{const lang=window.IlkerAdminI18n?.language||'ru';for(const {service,text}of serviceLabels)text.nodeValue=lang==='az'?service.name:(service.translations?.[lang]||service.name);};translateServices();document.addEventListener('adminlanguagechange',translateServices);view.d.addEventListener('close',()=>document.removeEventListener('adminlanguagechange',translateServices),{once:true});
   controls.append(serviceRoot,master.root,when.root,time.root);
   const summary=note('Выберите услуги, мастера и дату, затем проверьте свободное время.');controls.append(summary);let slots=null,sequence=0;
   function data(){return {name:customer.input.value.trim(),phone:phone.input.value.trim(),date:when.input.value,time:time.input.value,masterId:master.input.value,room:category.input.value,serviceIds:checkboxes.filter(c=>c.checked).map(c=>c.value),...(existing?{id:existing.id,revision:existing.revision}:{})};}
@@ -43,13 +45,13 @@ window.IlkerReception=(()=>{
   function invalidate(){sequence++;slots=null;time.input.replaceChildren(new Option('Проверьте свободное время',''));summary.textContent='Условия изменены. Проверьте свободное время.';}
   checkboxes.forEach(c=>c.addEventListener('change',()=>{masters();invalidate();}));for(const input of [category.input,when.input,master.input])input.addEventListener('change',invalidate);
   masters();
-  controls.append(button('Проверить свободное время',async()=>{
+  const checkAvailability=button('Проверить свободное время',async()=>{
    const payload=data();if(!payload.serviceIds.length||!payload.masterId||!payload.date){view.problem.textContent='Выберите услуги, мастера и дату.';return;}
    const id=++sequence;view.problem.textContent='';
    try{const result=await api('/api/admin/availability',{...payload,time:existing?.time||payload.time});if(id!==sequence)return;slots=result;time.input.replaceChildren(new Option('Выберите время',''),...result.slots.map(s=>{const option=new Option(s.time+(s.status==='available'?'':' · недоступно'),s.time);option.disabled=s.status!=='available';return option;}));if(existing&&result.slots.some(s=>s.time===existing.time&&s.status==='available'))time.input.value=existing.time;
     summary.textContent=`${result.durationMinutes} мин · ${result.priceMin===result.priceMax?money(result.priceMin):money(result.priceMin)+'–'+money(result.priceMax)}`;
    }catch(error){view.problem.textContent=message(error);}
-  }));
+  });window.IlkerAdminI18n?.bind(checkAvailability,'Проверить свободное время');controls.append(checkAvailability);
   const save=mutationControls(view,controls,existing?'/api/admin/bookings/reschedule':'/api/admin/bookings/create',()=>{
    if(!slots||!slots.slots.some(s=>s.time===time.input.value&&s.status==='available'))throw Object.assign(new Error('Time unavailable'),{status:409});
    return {...data(),requestKey:crypto.randomUUID(),expectedQuote:{min:slots.priceMin,max:slots.priceMax,duration:slots.durationMinutes}};
