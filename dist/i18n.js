@@ -1,6 +1,8 @@
 'use strict';
 (() => {
  const dictionary = {
+ "Отменить запись": {"ru":"Отменить запись","az":"Rezervasiyanı ləğv et","en":"Cancel booking"},
+ "Сохраните ссылку: она позволит отменить запись до начала визита.": {"ru":"Сохраните ссылку: она позволит отменить запись до начала визита.","az":"Bu keçidi saxlayın: ziyarət başlamazdan əvvəl rezervasiyanı ləğv edə bilərsiniz.","en":"Save this link to cancel your booking before your visit."},
  "Quote changed": {"ru":"Цена или длительность услуги изменилась. Проверьте итог и выберите время ещё раз.","az":"Xidmətin qiyməti və ya müddəti dəyişib. Yekunu yoxlayın və vaxtı yenidən seçin.","en":"The price or duration changed. Review the total and select a time again."},
  "Мастер": {
   "ru": "Мастер",

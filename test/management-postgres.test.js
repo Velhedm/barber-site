@@ -59,7 +59,7 @@ test('PostgreSQL: migration preserves copied records; independent processes seri
     assert.deepEqual(result.filter(r=>r.status==='rejected').map(r=>({status:r.reason.status||0,code:r.reason.code||'none'})),Array.from({length:19},()=>({status:409,code:'none'})));
     const independent = await b.shop.book(request('master-2'));assert.equal(independent.master_id,'master-2');
     const retry = request('master-1','15:00');const first=await a.shop.book(retry);assert.equal((await b.shop.book(retry)).id,first.id);
-    await a.shop.cancel(first.id);assert.equal((await b.shop.availabilityInput(retry)).slots.find(s=>s.time==='15:00').status,'available');
+    const cancelled=await Promise.all([a.shop.cancelByClient(first.id,retry.requestKey),b.shop.cancelByClient(first.id,retry.requestKey)]);assert.ok(cancelled.every(x=>x.ok));assert.equal((await b.shop.availabilityInput(retry)).slots.find(s=>s.time==='15:00').status,'available');
     const c=await start();assert.equal((await c.shop.history('master-2')).rows[0].id,independent.id);
     await a.db.prepare('INSERT INTO ilker_push_subscriptions(id,endpoint,subscription,created_at) VALUES(?,?,?,?)').run('synthetic-push','https://fcm.googleapis.com/synthetic','{}',1);
     await a.db.prepare("INSERT INTO ilker_push_owners(subscription_id,user_id) VALUES('synthetic-push','owner')").run();

@@ -169,9 +169,15 @@
     $('#success-master-row').hidden=!state.management;$('#success-master').textContent=state.management?masterName(state.masters.find(m=>m.id===result.masterId)) : '';
     $('#success-date').textContent=label(result.date,{day:'numeric',month:'long',year:'numeric'});
     $('#success-time').textContent=`${result.time}–${endTime(result.time,result.durationMinutes)}`;
+    let durationRow=$('#success-duration-row');if(!durationRow){durationRow=document.createElement('div');durationRow.id='success-duration-row';durationRow.append(document.createElement('span'),document.createElement('strong'));$('#success-time').parentElement.after(durationRow);}durationRow.querySelector('span').textContent=t('Длительность');durationRow.querySelector('strong').textContent=`${result.durationMinutes} ${t('мин')}`;
     $('#success-room').textContent=roomName(bookedService.room);
     $('#success-service').textContent=result.items?result.items.map(snapshot=>{const item=bookedService.items.find(s=>s.id===snapshot.service_id&&s.name===snapshot.service_name);return item?serviceName(item):snapshot.service_name;}).join(', '):bookedService.items.map(serviceName).join(', ');$('#success-price').textContent=(result.priceMin!==undefined?(result.priceMin===result.priceMax?String(result.priceMin/100):`${result.priceMin/100}–${result.priceMax/100}`):bookedService.quotedPrice)+' AZN';
     $('#success-reference').textContent=t('Номер записи: ')+result.id;
+    let cancellation=$('#success-cancellation');
+    if(state.management){
+      if(!cancellation){cancellation=document.createElement('div');cancellation.id='success-cancellation';cancellation.className='success-note';const note=document.createElement('p'),link=document.createElement('a');link.className='text-button';cancellation.append(note,link);$('#success-reference').after(cancellation);}
+      cancellation.hidden=false;cancellation.querySelector('p').textContent=t('Сохраните ссылку: она позволит отменить запись до начала визита.');const link=cancellation.querySelector('a');link.textContent=t('Отменить запись');link.href='/cancel.html#'+result.id+'.'+state.requestKey;
+    }else if(cancellation)cancellation.hidden=true;
   }
   document.addEventListener('languagechange',()=>{
     for(const element of document.querySelectorAll('[data-message-key]'))element.textContent=t(element.dataset.messageKey);

@@ -103,6 +103,7 @@ async function createApp(options={}){
  app.post('/api/bookings',limiter(options.bookingLimit||12,10*60000),async(req,res)=>{
   const booking=await shop.book(req.body);res.status(201).json({id:booking.id,date:booking.date,time:booking.time,serviceId:booking.service_id,room:booking.room,durationMinutes:booking.duration_minutes,status:'confirmed',...(management?{masterId:booking.master_id,masterName:booking.master_name,priceMin:booking.price_min,priceMax:booking.price_max,items:booking.items}: {})});
  });
+ if(management)app.post('/api/bookings/cancel',limiter(6,10*60000),async(req,res)=>res.json(await shop.cancelByClient(req.body.id,req.body.token)));
  const receptionRoutes=new Set([
   'GET /api/admin/session','POST /api/admin/logout','GET /api/admin/day','POST /api/admin/day','POST /api/admin/slot',
   'POST /api/admin/availability','POST /api/admin/bookings/create','POST /api/admin/bookings/reschedule','POST /api/admin/bookings/status','POST /api/admin/bookings/comment',

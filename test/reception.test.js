@@ -7,6 +7,13 @@ async function fixture(t){let current=Date.parse('2030-01-01T04:00:00Z');const a
  const request=(extra={})=>({name:'Synthetic client',phone:'+994 (50) 000-00-01',date:'2030-01-02',time:'11:00',serviceIds:['haircut'],masterId:'master-1',room:'zal',requestKey:randomUUID(),...extra});
  const change=(row,extra={})=>({id:row.id,revision:row.revision,requestKey:randomUUID(),...extra});return {...app,request,change,setNow:v=>current=Date.parse(v)};
 }
+test('client cancellation follows rescheduled visit and rejects cancellation after start',async t=>{
+ const {shop,request,change,setNow}=await fixture(t);const input=request(),original=await shop.book(input);
+ const moved=await shop.reschedule(change(original,{date:'2030-01-03',time:'11:00',masterId:'master-1',room:'zal',serviceIds:['haircut']}));
+ setNow('2030-01-03T06:59:00Z');assert.equal((await shop.cancelByClient(moved.id,input.requestKey)).ok,true);assert.equal((await shop.getBooking(moved.id)).status,'cancelled');
+ setNow('2030-01-01T04:00:00Z');const lateInput=request(),late=await shop.book(lateInput);setNow('2030-01-02T07:00:00Z');
+ await assert.rejects(shop.cancelByClient(late.id,lateInput.requestKey),{status:409});assert.equal((await shop.getBooking(late.id)).status,'active');
+});
 test('reception can book offline master; normalizes clients and protects profiles from public writes',async t=>{
  const {shop,request}=await fixture(t);await assert.rejects(shop.book(request({masterId:'master-2'})),{status:409});
  const first=await shop.book(request({masterId:'master-2'}),{internal:true,actor:'owner'});assert.equal(first.source,'reception');

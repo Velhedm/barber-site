@@ -22,7 +22,12 @@ test('management API rejects unauthenticated, CSRF, cross-origin, invalid inputs
  const result=await request('/api/bookings',payload);assert.equal(result.status,201);assert.equal(result.data.masterId,master.id);assert.equal(result.data.priceMin,3500);
  assert.equal(result.data.name,undefined);assert.equal(result.data.phone,undefined);assert.equal(result.data.requestKey,undefined);
  const available=await request('/api/availability?'+new URLSearchParams({date:payload.date,serviceIds:'haircut',room:'zal',masterId:master.id}));assert.equal(available.status,200);assert.equal(available.data.slots.find(s=>s.time==='11:00').status,'booked');assert.equal(JSON.stringify(available).includes('Private Test'),false);
+ assert.equal((await request('/api/bookings/cancel',{id:result.data.id,token:randomUUID()})).status,404);
+ assert.equal((await request('/api/bookings/cancel',{id:result.data.id,token:payload.requestKey},{Origin:'https://untrusted.invalid'})).status,403);
  assert.equal((await request('/api/availability?date=2030-01-02&serviceIds=haircut&room=zal')).status,400);
  const list=await request('/api/admin/bookings',undefined,auth);assert.equal(list.data.rows[0].master_id,master.id);assert.equal(list.data.rows[0].request_key,undefined);
- await request('/api/admin/cancel',{id:result.data.id},auth);assert.equal((await request('/api/admin/delete',{id:result.data.id},auth)).status,200);assert.ok(await runtime.db.prepare('SELECT id FROM ilker_appointments WHERE id=?').get(result.data.id));
+ assert.equal((await request('/api/bookings/cancel',{id:result.data.id,token:payload.requestKey})).status,200);
+ assert.equal((await request('/api/bookings/cancel',{id:result.data.id,token:payload.requestKey})).status,200);
+ const freed=await request('/api/availability?'+new URLSearchParams({date:payload.date,serviceIds:'haircut',room:'zal',masterId:master.id}));assert.equal(freed.data.slots.find(s=>s.time==='11:00').status,'available');
+ assert.equal((await request('/api/admin/delete',{id:result.data.id},auth)).status,200);assert.ok(await runtime.db.prepare('SELECT id FROM ilker_appointments WHERE id=?').get(result.data.id));
 });

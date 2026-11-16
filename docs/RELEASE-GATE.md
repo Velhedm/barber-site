@@ -88,3 +88,15 @@ The service worker scope and Push subscriptions are unchanged. Verify the upgrad
 an actual installed iPhone PWA: manifest-scope changes, opening the client externally,
 return to the admin and Push after the upgrade are not established by Chromium tests.
 The supplied logo remains temporary and icon redesign is still pending.
+
+## Client cancellation link
+
+For new online bookings, the existing cryptographically random booking request UUID
+also acts as the cancellation capability, paired with the booking ID. It is placed in
+the URL fragment, never in a query string, and is only sent to the cancellation endpoint
+in a JSON POST after the user presses the confirmation button. Opening the link cannot
+change a booking. Treat the link like a password; anyone possessing it can cancel.
+The customer must save the link, as no delivery provider is configured. It follows
+rescheduling and only permits cancellation before the latest start time. Repeated POSTs
+are safe. No personal data is returned. Bookings made before this UI do not acquire a
+link automatically. Cancellation Push notifications remain an unmet release requirement.

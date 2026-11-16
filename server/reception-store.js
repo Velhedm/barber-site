@@ -104,6 +104,19 @@ async function createReceptionStore(db,base,{now=()=>Date.now()}={}){
  async function legacyStatus(id,status,actor='owner'){
   const row=await getBooking(id);if(row.status===status)return {ok:true};return setStatus({id,status,revision:row.revision,requestKey:randomUUID()},actor);
  }
+ async function cancelByClient(id,token){
+  if(!UUID.test(id||'')||!UUID.test(token||''))throw failure(404,'Cancellation link unavailable');
+  return db.transaction(async()=>{
+   const row=await db.prepare("SELECT id,date,time,status FROM ilker_appointments WHERE id=? AND request_key=? AND kind='booking'").get(id,token);
+   if(!row)throw failure(404,'Cancellation link unavailable');
+   if(row.status==='cancelled')return {ok:true};
+   if(row.status!=='active'||Date.parse(`${row.date}T${row.time}:00+04:00`)<=now())throw failure(409,'Cancellation unavailable');
+   await db.prepare("UPDATE ilker_appointments SET status='cancelled' WHERE id=?").run(id);
+   await bump(id);
+   await base.audit('public','status','booking',id,{from:'active',to:'cancelled',paymentPreserved:true});
+   return {ok:true};
+  });
+ }
  async function setActualPrice(id,price,actor='owner'){
   if(!/^\d{1,7}(?:\.\d{1,2})?$/.test(String(price)))throw failure(400,'Invalid actual price');const [whole,fraction='']=String(price).split('.'),amount=Number(whole)*100+Number(fraction.padEnd(2,'0'));
   return db.transaction(async()=>{
@@ -223,6 +236,6 @@ async function createReceptionStore(db,base,{now=()=>Date.now()}={}){
   return {date:value,count,customers,counts,masterStates,next:next?(await hydrate([next]))[0]:null,rows:await hydrate(rows),truncated:count>500,revenueMinor:summary.totalMinor};
  }
  async function history(masterId,offset=0){const list=await listBookings({masterId,offset});const revenue=await finance({masterId});return {rows:list.rows,count:list.count,revenue:{total:revenue.totalMinor,completed:revenue.visits}};}
- return {...base,linkCreated,book,publicResult,getBooking,adminAvailability,reschedule,setStatus,cancel:(id,actor)=>legacyStatus(id,'cancelled',actor),complete:(id,actor)=>legacyStatus(id,'completed',actor),setActualPrice,adjustFinance,comment,remove,listBookings,clients,saveClient,anonymizeClient,finance,revenue:()=>finance(),ledgerHistory,dashboard,history};
+ return {...base,linkCreated,book,publicResult,getBooking,adminAvailability,reschedule,setStatus,cancelByClient,cancel:(id,actor)=>legacyStatus(id,'cancelled',actor),complete:(id,actor)=>legacyStatus(id,'completed',actor),setActualPrice,adjustFinance,comment,remove,listBookings,clients,saveClient,anonymizeClient,finance,revenue:()=>finance(),ledgerHistory,dashboard,history};
 }
 module.exports={createReceptionStore};

@@ -34,3 +34,14 @@ Two local application instances also passed the competition and expired-lease re
 checks. Push sends were mocked. Default suite: 48 tests, 45 passed, 3 PostgreSQL tests
 skipped; the management PostgreSQL suite passed separately. Exactly-once delivery is
 not guaranteed if the server fails between provider acceptance and recording success.
+
+## Client cancellation follow-up
+
+The local suite passed 46 tests, with three opt-in PostgreSQL tests skipped in the
+default run. The management PostgreSQL suite passed separately on the isolated test
+branch, including concurrent duplicate cancellation and availability after cancellation.
+Chromium tested the link on a mobile viewport: opening it does not cancel, switching
+language works, confirmation cancels and no horizontal overflow occurred at 390px.
+Local tests also cover invalid capability, cross-origin rejection, cancellation after
+reschedule, refusal at/after visit start and repeated cancellation. No physical iPhone
+or outbound cancellation notification was tested. Cancellation Push remains pending.
