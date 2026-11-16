@@ -1,6 +1,43 @@
 'use strict';
 (() => {
  const dictionary = {
+ "Quote changed": {"ru":"Цена или длительность услуги изменилась. Проверьте итог и выберите время ещё раз.","az":"Xidmətin qiyməti və ya müddəti dəyişib. Yekunu yoxlayın və vaxtı yenidən seçin.","en":"The price or duration changed. Review the total and select a time again."},
+ "Мастер": {
+  "ru": "Мастер",
+  "az": "Usta",
+  "en": "Barber"
+ },
+ "Выберите мастера": {
+  "ru": "Выберите мастера",
+  "az": "Usta seçin",
+  "en": "Choose a barber"
+ },
+ "Нет доступных мастеров для этих услуг": {
+  "ru": "Нет доступных мастеров для этих услуг",
+  "az": "Bu xidmətlər üçün mövcud usta yoxdur",
+  "en": "No available barbers for these services"
+ },
+ "Master unavailable": {
+  "ru": "Мастер сейчас недоступен для записи.",
+  "az": "Usta hazırda onlayn rezervasiya qəbul etmir",
+  "en": "This barber is unavailable"
+ },
+ "Master cannot perform selected services": {
+  "ru": "Выберите мастера, который выполняет все выбранные услуги.",
+  "az": "Seçilən xidmətləri göstərən başqa usta seçin",
+  "en": "Choose a barber who offers all selected services"
+ },
+ "Service unavailable": {
+  "ru": "Услуга сейчас недоступна.",
+  "az": "Xidmət hazırda mövcud deyil",
+  "en": "This service is currently unavailable"
+ },
+ "Выбранный мастер": {
+  "ru": "Выбранный мастер",
+  "az": "Seçilmiş usta",
+  "en": "Selected barber"
+ }
+,
  "İlker Sevim Barber Club — Онлайн-запись к барберу": {
   "az": "İlker Sevim Barber Club — Onlayn rezervasiya",
   "en": "İlker Sevim Barber Club — Book your barber",

@@ -8,6 +8,8 @@ const path=require('node:path');
 const webpush=require('web-push');
 const {prepareIlkerStore}=require('./ilker-store');
 const {catalog}=require('./ilker-services');
+const {createManagementStore}=require('./management-store');
+const {migrateManagement}=require('./management-migration');
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 function verifyPassword(password,hash){try{const [salt,key]=hash.split(':');const expected=Buffer.from(key,'hex');const actual=scryptSync(password,salt,64);return expected.length===actual.length&&timingSafeEqual(expected,actual);}catch{return false;}}
@@ -36,11 +38,17 @@ async function createApp(options={}){
  const origin=options.origin||process.env.APP_ORIGIN||(process.env.RENDER_EXTERNAL_URL);
  const now=options.now||(()=>Date.now());
 
- const shop=await prepareIlkerStore(db,{now,bootstrap:!options.preMigrated,onBooked:async bookingId=>{
+ const management=options.management??(process.env.MANAGEMENT_ENABLED==='true');
+ const onBooked=async bookingId=>{
   const eventId=randomUUID();await db.prepare('INSERT INTO push_events(id,booking_id,created_at) VALUES(?,?,?)').run(eventId,bookingId,now());
   const subscriptions=await db.prepare('SELECT id FROM push_subscriptions').all();
   for(const sub of subscriptions)await db.prepare('INSERT INTO push_deliveries(id,event_id,subscription_id) VALUES(?,?,?)').run(randomUUID(),eventId,sub.id);
- }});
+ };
+ let shop=await prepareIlkerStore(db,{now,bootstrap:!options.preMigrated,sharedCapacity:!management,onBooked});
+ if(management){
+  if(options.migrateManagement&&!options.preMigrated)await migrateManagement(db);
+  shop=await createManagementStore(db,shop,{now,onBooked});
+ }
  if(!options.preMigrated)await db.exec(`
  CREATE TABLE IF NOT EXISTS ilker_sessions(token_hash TEXT PRIMARY KEY,csrf TEXT NOT NULL,expires BIGINT NOT NULL);
  CREATE TABLE IF NOT EXISTS ilker_push_subscriptions(id TEXT PRIMARY KEY,endpoint TEXT UNIQUE NOT NULL,subscription TEXT NOT NULL,created_at BIGINT NOT NULL);
@@ -59,6 +67,7 @@ async function createApp(options={}){
  app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'",'https://fonts.googleapis.com','https://cdnjs.cloudflare.com'],fontSrc:["'self'",'https://fonts.gstatic.com','https://cdnjs.cloudflare.com'],imgSrc:["'self'",'data:'],connectSrc:["'self'"],upgradeInsecureRequests:production?[]:null}}}));
  app.use('/api',express.json({limit:'8kb'}),async(req,res,next)=>{res.set('Cache-Control','no-store');if(req.method!=='GET'&&req.method!=='HEAD'){
   if(!req.is('application/json'))return res.status(415).json({error:'Ожидается JSON'});
+  if(!req.body||Array.isArray(req.body)||typeof req.body!=='object')return res.status(400).json({error:'Некорректный JSON'});
   if(req.get('sec-fetch-site')==='cross-site')return res.status(403).json({error:'Недопустимый источник запроса'});
   const allowed=origin||`${req.protocol}://${req.get('host')}`;
   if(req.get('origin')&&req.get('origin')!==allowed)return res.status(403).json({error:'Недопустимый источник запроса'});
@@ -68,15 +77,15 @@ async function createApp(options={}){
  app.get('/healthz',async(req,res)=>{(await db.prepare('SELECT 1').get());res.json({ok:true});});
  app.get('/api/meta',async(req,res)=>{
   const rows=await shop.settings();const durations=Object.fromEntries(rows.map(row=>[row.id,row.duration_minutes]));
-  const services=catalog.categories.flatMap(group=>group.services.map(item=>({id:item.id,name:item.name,translations:item.translations,group:group.id,groupName:group.name,groupTranslations:group.translations,prices:{zal:item.zal,vip:item.vip},durations:{zal:durations[item.id+':zal'],vip:durations[item.id+':vip']},zalNote:item.zal_note||null})));
-  res.json({brand:catalog.brand,serverTime:now(),timezone:'Asia/Baku',hours,services,notificationsEnabled:pushEnabled,maxDaysAhead:horizon});
+  const services=management?await shop.services():catalog.categories.flatMap(group=>group.services.map(item=>({id:item.id,name:item.name,translations:item.translations,group:group.id,groupName:group.name,groupTranslations:group.translations,prices:{zal:item.zal,vip:item.vip},durations:{zal:durations[item.id+':zal'],vip:durations[item.id+':vip']},zalNote:item.zal_note||null})));
+  res.json({management,brand:catalog.brand,serverTime:now(),timezone:'Asia/Baku',hours,services,notificationsEnabled:pushEnabled,maxDaysAhead:horizon});
  });
  app.get('/api/availability',async(req,res)=>{
   const ids=typeof req.query.serviceIds==='string'?req.query.serviceIds.split(','):undefined;
-  const data=await shop.availability(req.query.date,req.query.serviceId,req.query.room,ids);res.json(data);
+  const data=await shop.availability(req.query.date,req.query.serviceId,req.query.room,ids,req.query.masterId);res.json(data);
  });
  app.post('/api/bookings',limiter(options.bookingLimit||12,10*60000),async(req,res)=>{
-  const booking=await shop.book(req.body);res.status(201).json({id:booking.id,date:booking.date,time:booking.time,serviceId:booking.service_id,room:booking.room,durationMinutes:booking.duration_minutes,status:'confirmed'});
+  const booking=await shop.book(req.body);res.status(201).json({id:booking.id,date:booking.date,time:booking.time,serviceId:booking.service_id,room:booking.room,durationMinutes:booking.duration_minutes,status:'confirmed',...(management?{masterId:booking.master_id,masterName:booking.master_name,priceMin:booking.price_min,priceMax:booking.price_max,items:booking.items}: {})});
  });
  async function auth(req,res,next){const cookie=req.get('cookie')||'';const sessionToken=cookie.split(';').map(x=>x.trim()).find(x=>x.startsWith('rt_session='))?.slice(11);
   const session=sessionToken&&(await db.prepare('SELECT * FROM sessions WHERE token_hash=? AND expires>?').get(sha(sessionToken),now()));
@@ -94,11 +103,22 @@ async function createApp(options={}){
  app.get('/api/admin/day',auth,async(req,res)=>{
   if(!validDate(req.query.date))return res.status(400).json({error:'Некорректная дата'});
   const rows=await db.prepare("SELECT * FROM slots WHERE date=? AND status='active' ORDER BY time").all(req.query.date);
-  const itemMap=await shop.itemsFor(rows.filter(row=>row.kind==='booking').map(row=>row.id));const slots=rows.map(({request_key,...safe})=>({...safe,items:itemMap.get(safe.id)||[]}));
+  const itemMap=await shop.itemsFor(rows.filter(row=>row.kind==='booking').map(row=>row.id));const slots=await Promise.all(rows.map(async({request_key,...safe})=>management?{...await shop.publicResult(safe),request_key:undefined}:{...safe,items:itemMap.get(safe.id)||[]}));
   res.json({date:req.query.date,closed:Boolean((await db.prepare('SELECT 1 FROM closed_days WHERE date=?').get(req.query.date))),notificationsEnabled:pushEnabled,slots});
  });
- app.post('/api/admin/slot',auth,async(req,res)=>res.json(await shop.setSlot(req.body.date,req.body.time,req.body.blocked)));
- app.post('/api/admin/day',auth,async(req,res)=>res.json(await shop.setDay(req.body.date,req.body.closed)));
+ if(management){
+  app.get('/api/masters',async(req,res)=>res.json({masters:await shop.eligible({serviceIds:typeof req.query.serviceIds==='string'?req.query.serviceIds.split(','):[],room:req.query.room})}));
+  app.get('/api/admin/management',auth,async(req,res)=>res.json({masters:await shop.masters(true),rooms:await shop.rooms(),services:await shop.services(true)}));
+  app.post('/api/admin/masters',auth,async(req,res)=>res.json(await shop.saveMaster(req.body)));
+  app.post('/api/admin/rooms',auth,async(req,res)=>res.json(await shop.saveRoom(req.body)));
+  app.post('/api/admin/catalog',auth,async(req,res)=>res.json(await shop.saveService(req.body)));
+  app.post('/api/admin/master-exception',auth,async(req,res)=>res.json(await shop.setException(req.body)));
+  app.post('/api/admin/master-block',auth,async(req,res)=>res.json(await shop.setBlock(req.body)));
+  app.get('/api/admin/master-day',auth,async(req,res)=>res.json(await shop.dayDetails(req.query.masterId,req.query.date)));
+  app.get('/api/admin/master-history',auth,async(req,res)=>res.json(await shop.history(req.query.masterId,Number(req.query.offset||0))));
+ }
+ app.post('/api/admin/slot',auth,async(req,res)=>res.json(await shop.setSlot(req.body.date,req.body.time,req.body.blocked,req.body.masterId)));
+ app.post('/api/admin/day',auth,async(req,res)=>res.json(await shop.setDay(req.body.date,req.body.closed,req.body.masterId)));
  app.post('/api/admin/cancel',auth,async(req,res)=>res.json(await shop.cancel(req.body.id)));
  app.get('/api/admin/services',auth,async(req,res)=>res.json({services:await shop.settings()}));
  app.post('/api/admin/duration',auth,async(req,res)=>res.json(await shop.setDuration(req.body.serviceId,req.body.room,req.body.minutes)));
@@ -139,11 +159,11 @@ async function createApp(options={}){
   const args=[status,status,q,q,q,digits,`%${digits}%`];
   const rows=(await db.prepare(`SELECT id,date,time,status,name,phone,service_id,service_name,room,price_min,price_max,actual_price,duration_minutes,sessions_count,created_at FROM slots WHERE ${condition} ORDER BY created_at DESC,id DESC LIMIT 50 OFFSET ?`).all(...args,offset));
   const count=(await db.prepare(`SELECT count(*) AS n FROM slots WHERE ${condition}`).get(...args)).n;
-  const itemMap=await shop.itemsFor(rows.map(row=>row.id));res.json({rows:rows.map(row=>({...row,items:itemMap.get(row.id)||[]})),count,offset});
+  const itemMap=await shop.itemsFor(rows.map(row=>row.id));res.json({rows:await Promise.all(rows.map(async row=>management?shop.publicResult(row):({...row,items:itemMap.get(row.id)||[]}))),count,offset});
  });
  app.get('/api/admin/booking/:id',auth,async(req,res)=>{
   const row=(await db.prepare("SELECT id,date,time,status,name,phone,service_id,service_name,room,price_min,price_max,actual_price,duration_minutes,sessions_count,created_at FROM slots WHERE id=? AND kind='booking'").get(req.params.id));
-  if(!row)return res.status(404).json({error:'Запись не найдена'});res.json({...row,items:await shop.items(row.id)});
+  if(!row)return res.status(404).json({error:'Запись не найдена'});res.json(management?await shop.publicResult(row):{...row,items:await shop.items(row.id)});
  });
  app.post('/api/admin/delete',auth,async(req,res)=>res.json(await shop.remove(req.body.id)));
  let draining=false;

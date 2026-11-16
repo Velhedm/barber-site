@@ -12,7 +12,7 @@ function toMinor(amount){
  const [whole,fraction='']=value.split('.');return Number(whole)*100+Number(fraction.padEnd(2,'0'));
 }
 function formatAmount(minor){return (minor/100).toFixed(2);}
-async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},bootstrap=true}={}){
+async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},bootstrap=true,sharedCapacity=true}={}){
  if(bootstrap){
  await db.exec(`
  CREATE TABLE IF NOT EXISTS ilker_service_settings(id TEXT PRIMARY KEY,duration_minutes INTEGER);
@@ -22,7 +22,7 @@ async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},boo
   name TEXT,phone TEXT,service_id TEXT,room TEXT,service_name TEXT,price_min INTEGER,price_max INTEGER,actual_price INTEGER,
   duration_minutes INTEGER NOT NULL,sessions_count INTEGER NOT NULL DEFAULT 1,request_key TEXT UNIQUE,created_at TEXT NOT NULL
  );
- CREATE UNIQUE INDEX IF NOT EXISTS ilker_unique_active_slot ON ilker_appointments(date,time) WHERE status='active';
+ ${sharedCapacity?"CREATE UNIQUE INDEX IF NOT EXISTS ilker_unique_active_slot ON ilker_appointments(date,time) WHERE status='active';":''}
  CREATE TABLE IF NOT EXISTS ilker_booking_items(booking_id TEXT NOT NULL REFERENCES ilker_appointments(id) ON DELETE CASCADE,position INTEGER NOT NULL,service_id TEXT NOT NULL,service_name TEXT NOT NULL,price_min INTEGER NOT NULL,price_max INTEGER NOT NULL,duration_minutes INTEGER NOT NULL,sessions_count INTEGER NOT NULL,PRIMARY KEY(booking_id,position));
  `);
  for(const service of knownServices)for(const room of ['zal','vip'])await db.prepare('INSERT INTO ilker_service_settings(id,duration_minutes) VALUES(?,?) ON CONFLICT(id) DO NOTHING').run(service.id+':'+room,service.duration_minutes??null);
