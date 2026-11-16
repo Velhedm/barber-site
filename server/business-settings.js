@@ -13,4 +13,9 @@ function createBusinessSettings(db,{audit}){
  }
  return {get,save};
 }
-module.exports={migrateBusinessSettings,createBusinessSettings};
+async function migrateBookingPolicy(db){return db.transaction(async()=>{
+ if(await db.prepare('SELECT version FROM ilker_management_versions WHERE version=11').get())return {alreadyApplied:true};
+ await db.exec('CREATE TABLE ilker_booking_policy(booking_id TEXT PRIMARY KEY REFERENCES ilker_appointments(id),cancel_minutes INTEGER NOT NULL CHECK(cancel_minutes BETWEEN 0 AND 10080))');
+ await db.prepare('INSERT INTO ilker_management_versions(version,applied_at) VALUES(11,?)').run(new Date().toISOString());return {alreadyApplied:false};
+});}
+module.exports={migrateBusinessSettings,createBusinessSettings,migrateBookingPolicy};

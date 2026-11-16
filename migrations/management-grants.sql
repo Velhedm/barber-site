@@ -32,4 +32,6 @@ GRANT SELECT,UPDATE ON ilker_business_settings TO ilker_service;
 REVOKE ALL ON ilker_system_alerts,ilker_system_alert_deliveries FROM PUBLIC;
 GRANT SELECT,INSERT ON ilker_system_alerts TO ilker_service;
 GRANT SELECT,INSERT,UPDATE ON ilker_system_alert_deliveries TO ilker_service;
+REVOKE ALL ON ilker_booking_policy FROM PUBLIC;
+GRANT SELECT,INSERT ON ilker_booking_policy TO ilker_service;
 COMMIT;

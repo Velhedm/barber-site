@@ -19,7 +19,7 @@ Render auto-deploys the former; pushing there would publish unfinished functiona
 5. Run full unit/API/browser/two-instance PostgreSQL tests, then real iPhone PWA/Push checks.
 6. Assign historical unassigned bookings through the stage-2 reschedule action before
    enabling new masters. Unassigned active intervals intentionally block all masters.
-7. Explicit migrations 1–10 (masters, reception/CRM/finance, accounts, Push leases, change events, ordering, email recovery, reminders, business settings and system alerts): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
+7. Explicit migrations 1–11 (masters, reception/CRM/finance, accounts, Push leases, change events, ordering, email recovery, reminders, business settings, system alerts and booking-policy snapshots): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
    `node scripts/migrate-management.js --apply`. Then review/apply
    `migrations/management-grants.sql` with the database owner, never at app startup.
 8. Only when all release gates pass, deploy tested commit and enable `MANAGEMENT_ENABLED=true`.
@@ -44,6 +44,8 @@ PostgreSQL test requires `ILKER_TEST_DATABASE_URL` and matching
 it migrates that branch's copied Ilker tables and adds CRM links/opening balances, creates an isolated synthetic schema and
 removes that synthetic schema after the test. It must never run against production.
 No test should use production push credentials or real customer destinations.
+The legacy PostgreSQL test additionally requires TEST_DATABASE_URL and matching
+TEST_DATABASE_EXPECTED_HOST, and rejects the known production endpoint.
 
 ## Preliminary test-branch restore, 2026-11-16
 
@@ -153,7 +155,14 @@ No exception text, customer data or secrets are included in the notification.
 `scripts/backup-neon.sh` is a packaging helper requiring a PostgreSQL 18-compatible
 `pg_dump`, a direct connection configured privately via PGSERVICEFILE, and a separate
 passphrase file. It intentionally excludes ownership and ACLs, so it is NOT a complete
-production backup by itself. The helper has only had syntax and simulated failure/no-overwrite checks; the earlier test
-branch dump/restore was performed independently. Production roles, grants, external
+production backup by itself. The helper passed no-overwrite and simulated failure checks and an encrypted
+backup/restore rehearsal against an isolated PostgreSQL 18 container with synthetic
+data. The earlier Neon test-branch dump/restore was performed independently. Production roles, grants, external
 resources, independent key/backup storage and a production-derived restore rehearsal
 remain mandatory.
+
+## Cancellation policy snapshot
+
+Migration 11 preserves the cancellation cutoff in effect when a new booking is made.
+Legacy bookings without a snapshot retain cancellation until the start of the visit.
+A changed policy is rechecked before booking; existing snapshots are never overwritten.

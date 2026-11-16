@@ -21,7 +21,7 @@ const {migrateRecovery}=require('./recovery-migration');
 const {createRecoveryStore}=require('./recovery-store');
 const {createEmailProvider}=require('./email-provider');
 const {migrateReminders,createReminders}=require('./reminders');
-const {migrateBusinessSettings,createBusinessSettings}=require('./business-settings');
+const {migrateBusinessSettings,createBusinessSettings,migrateBookingPolicy}=require('./business-settings');
 const {migrateSystemAlerts,createSystemAlerts}=require('./system-alerts');
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -94,6 +94,8 @@ async function createApp(options={}){
   if(options.migrateManagement&&!options.preMigrated)await migrateSystemAlerts(db);
   if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=10').get())throw new Error('System alerts migration required');
   systemAlerts=createSystemAlerts(db,{now,send:pushSend});
+  if(options.migrateManagement&&!options.preMigrated)await migrateBookingPolicy(db);
+  if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=11').get())throw new Error('Booking policy migration required');
  }
  const hours=Array.from({length:12},(_,i)=>String(9+i).padStart(2,'0')+':00');
  const horizon=365;

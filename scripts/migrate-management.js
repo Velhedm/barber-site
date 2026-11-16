@@ -7,7 +7,7 @@ const {migratePush}=require('../server/push-migration');
 const {migratePushChanges,migratePushOrder}=require('../server/push-changes');
 const {migrateRecovery}=require('../server/recovery-migration');
 const {migrateReminders}=require('../server/reminders');
-const {migrateBusinessSettings}=require('../server/business-settings');
+const {migrateBusinessSettings,migrateBookingPolicy}=require('../server/business-settings');
 const {migrateSystemAlerts}=require('../server/system-alerts');
 
 async function main() {
@@ -28,10 +28,11 @@ async function main() {
     await migrateRecovery(db);
     await migrateReminders(db);
     await migrateBusinessSettings(db);
-    const result = await migrateSystemAlerts(db);
+    await migrateSystemAlerts(db);
+    const result = await migrateBookingPolicy(db);
     const after = await db.prepare('SELECT COUNT(*) AS n FROM ilker_appointments').get();
     if (before.n !== after.n) throw new Error('Record preservation check failed');
-    console.log(JSON.stringify({migration: 10, ...result, existingAppointmentCountUnchanged: true}));
+    console.log(JSON.stringify({migration: 11, ...result, existingAppointmentCountUnchanged: true}));
   } finally {await db.close();}
 }
 main().catch(() => {console.error('Migration failed; no secrets or customer details logged. Inspect a test environment before retrying.'); process.exitCode = 1;});

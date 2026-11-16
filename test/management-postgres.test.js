@@ -11,13 +11,13 @@ const {migratePush}=require('../server/push-migration');
 const {migratePushChanges,migratePushOrder}=require('../server/push-changes');
 const {migrateRecovery}=require('../server/recovery-migration');
 const {migrateReminders}=require('../server/reminders');
-const {migrateBusinessSettings}=require('../server/business-settings');
+const {migrateBusinessSettings,migrateBookingPolicy}=require('../server/business-settings');
 const {migrateSystemAlerts}=require('../server/system-alerts');
 
 // Isolated schema AND explicit test-branch hostname: no synthetic rows in real tables.
 test('PostgreSQL: migration preserves copied records; independent processes serialize overlapping requests', {skip: !process.env.ILKER_TEST_DATABASE_URL}, async () => {
   const parsed = new URL(process.env.ILKER_TEST_DATABASE_URL);
-  if (parsed.hostname !== process.env.ILKER_TEST_EXPECTED_HOST) throw new Error('Test branch host must be explicitly confirmed');
+  if (parsed.hostname !== process.env.ILKER_TEST_EXPECTED_HOST || parsed.hostname.replace('-pooler','') === 'ep-weathered-surf-b43wbped.c-6.us-east-2.aws.neon.tech') throw new Error('Nonproduction test branch host must be explicitly confirmed');
   parsed.hostname = parsed.hostname.replace('-pooler', '');
   const configuration = {databaseUrl: parsed.href, bootstrapLegacy: false, proxyUrl: process.env.HTTPS_PROXY};
   const control = await createDatabase(configuration);
@@ -42,6 +42,7 @@ test('PostgreSQL: migration preserves copied records; independent processes seri
     await migrateReminders(control);
     await migrateBusinessSettings(control);
     await migrateSystemAlerts(control);
+    await migrateBookingPolicy(control);
     assert.equal((await migrateReception(control)).alreadyApplied,true);
     const oldRevenue=await control.prepare("SELECT COALESCE(SUM(actual_price),0) AS n FROM ilker_appointments WHERE kind='booking' AND status='completed'").get();
     const migratedRevenue=await control.prepare("SELECT COALESCE(SUM(amount),0) AS n FROM ilker_finance_entries WHERE reason='opening_balance'").get();

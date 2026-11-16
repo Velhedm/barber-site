@@ -11,8 +11,11 @@ test('owner settings take effect without restart and preserve visits and safe re
  const data={name:'Synthetic Salon',phone:'+994 55 111 22 33',online:false,cancel_minutes:120,revision:settings.revision};assert.equal((await save(data)).status,200);assert.equal((await save(data)).status,409);
  const meta=await (await fetch(base+'/api/meta')).json();assert.equal(meta.business.name,'Synthetic Salon');assert.equal(meta.business.online,false);assert.equal((await r.shop.book(payload)).id,b.id);
  await assert.rejects(r.shop.book({...payload,requestKey:randomUUID(),time:'14:00'}),{message:'Online booking unavailable'});assert.equal((await r.shop.getBooking(b.id)).status,'active');
- clock=Date.parse('2030-01-02T06:00:01Z');await assert.rejects(r.shop.cancelByClient(b.id,payload.requestKey),{message:'Cancellation unavailable'});
- session=await r.access.login({password:'synthetic-owner-password'},'synthetic-again','');const current=await get();assert.equal((await save({...data,online:true,cancel_minutes:0,revision:current.revision})).status,200);assert.deepEqual(await r.shop.cancelByClient(b.id,payload.requestKey),{ok:true});
+ clock=Date.parse('2030-01-02T06:00:01Z');assert.deepEqual(await r.shop.cancelByClient(b.id,payload.requestKey),{ok:true}); // Existing booking retained its original zero-minute cutoff.
+ session=await r.access.login({password:'synthetic-owner-password'},'synthetic-again','');let current=await get();assert.equal((await save({...data,online:true,revision:current.revision})).status,200);
+ await assert.rejects(r.shop.book({...payload,requestKey:randomUUID(),time:'14:00',expectedCancellationMinutes:0}),{message:'Cancellation policy changed'});
+ const later={...payload,requestKey:randomUUID(),time:'14:00'},b2=await r.shop.book(later);current=await get();assert.equal((await save({...data,online:true,cancel_minutes:0,revision:current.revision})).status,200);
+ clock=Date.parse('2030-01-02T08:00:01Z');await assert.rejects(r.shop.cancelByClient(b2.id,later.requestKey),{message:'Cancellation unavailable'}); // Newer setting cannot rewrite the agreed policy.
  assert.equal((await save({...data,phone:'<script>',revision:current.revision+1})).status,400);
  const limited=await r.access.saveUser('owner',{login:'synthetic-staff',displayName:'Staff',role:'reception',active:true,newPassword:'synthetic-staff-password',currentPassword:'synthetic-owner-password'});
  const staff=await r.access.login({login:limited.login,password:'synthetic-staff-password'},'staff-ip','');

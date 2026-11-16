@@ -2,7 +2,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUUID,createHash}=require('node:crypto');
 const {createDatabase}=require('../server/database'),{createApp}=require('../server/app'),{hashPassword}=require('../server/access-store');
 test('PostgreSQL access: atomic credential import, shared sessions/revocation, role changes and durable throttle',{skip:!process.env.ILKER_TEST_DATABASE_URL},async()=>{
- const parsed=new URL(process.env.ILKER_TEST_DATABASE_URL);if(parsed.hostname!==process.env.ILKER_TEST_EXPECTED_HOST)throw new Error('Explicit test host required');parsed.hostname=parsed.hostname.replace('-pooler','');
+ const parsed=new URL(process.env.ILKER_TEST_DATABASE_URL);if(parsed.hostname!==process.env.ILKER_TEST_EXPECTED_HOST||parsed.hostname.replace('-pooler','')==='ep-weathered-surf-b43wbped.c-6.us-east-2.aws.neon.tech')throw new Error('Explicit nonproduction test host required');parsed.hostname=parsed.hostname.replace('-pooler','');
  const config={databaseUrl:parsed.href,bootstrapLegacy:false,proxyUrl:process.env.HTTPS_PROXY};const control=await createDatabase(config),schema='ilker_access_test_'+randomUUID().replaceAll('-',''),runtimes=[];
  try{
   await control.exec('CREATE SCHEMA '+schema);parsed.searchParams.set('options','-c search_path='+schema);
@@ -31,6 +31,9 @@ test('PostgreSQL access: atomic credential import, shared sessions/revocation, r
   await a.shop.setDuration('haircut','zal',60);const master=(await a.shop.masters())[0];await a.shop.saveMaster({id:master.id,revision:master.revision,name:'',online:true,archived:false,stepMinutes:30,serviceIds:['haircut'],schedule:Array.from({length:7},()=>({closed:false,start:'09:00',end:'21:00',breaks:[]}))});
   const reminderConfig=await a.reminders.settings();await a.reminders.saveSettings({revision:reminderConfig.revision,enabled:true,offsets:[120]},'owner');
   await b.shop.book({name:'Synthetic client',phone:'+994500000113',date:'2030-01-02',time:'12:00',masterId:master.id,serviceIds:['haircut'],room:'zal',requestKey:randomUUID(),reminder:{consent:true,email:'client@example.invalid',language:'en'}});
+  const business=require('../server/business-settings').createBusinessSettings(a.db,{audit:a.shop.audit}),old=await business.get();const key=randomUUID();
+  const outcomes=await Promise.allSettled([business.save({...old,cancel_minutes:180},'owner'),b.shop.book({name:'Concurrent policy test',phone:'+994500000114',date:'2030-01-03',time:'13:00',masterId:master.id,serviceIds:['haircut'],room:'zal',requestKey:key,expectedCancellationMinutes:old.cancel_minutes})]);
+  assert.equal(outcomes[0].status,'fulfilled');if(outcomes[1].status==='fulfilled'){const policy=await c.db.prepare('SELECT cancel_minutes FROM ilker_booking_policy WHERE booking_id=?').get(outcomes[1].value.id);assert.equal(policy.cancel_minutes,old.cancel_minutes);}else assert.equal(outcomes[1].reason.message,'Cancellation policy changed');
   clock=Date.parse('2030-01-02T06:00:01Z');await Promise.all([a.drainEmail(),b.drainEmail(),c.drainEmail()]);assert.equal(emails.length,3);assert.equal((await a.reminders.list()).filter(row=>row.state==='sent').length,1);
   const subscription={endpoint:'https://fcm.googleapis.com/synthetic-postgres-alert',keys:{p256dh:'A'.repeat(87),auth:'A'.repeat(22)}};await a.access.subscribe('owner',subscription,null);a.systemAlerts.flag();b.systemAlerts.flag();c.systemAlerts.flag();await Promise.all([a.drainOutbox(),b.drainOutbox(),c.drainOutbox()]);assert.equal(pushes.filter(p=>p.tag.startsWith('system-')).length,1);
  }finally{await Promise.all(runtimes.map(r=>r.close()));await control.exec('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await control.close();}

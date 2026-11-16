@@ -64,6 +64,16 @@
  catalog['Invalid business settings']={ru:'Проверьте название, телефон и срок отмены.',az:'Adı, telefonu və ləğv müddətini yoxlayın.',en:'Check the name, phone and cancellation cutoff.'};
  catalog['Отключить напоминания']={ru:'Отключить напоминания',az:'Xatırlatmaları söndür',en:'Disable reminders'};
  catalog['Отключить напоминания для этой записи? Адрес Email будет удалён.']={ru:'Отключить напоминания для этой записи? Адрес Email будет удалён.',az:'Bu rezervasiya üçün xatırlatmalar söndürülsün? Email ünvanı silinəcək.',en:'Disable reminders for this booking? The email address will be removed.'};
+ Object.assign(catalog,{
+  'audit.business_settings':{ru:'Изменение настроек салона',az:'Salon ayarlarının dəyişdirilməsi',en:'Salon settings changed'},
+  'audit.reminder_settings':{ru:'Изменение напоминаний',az:'Xatırlatmaların dəyişdirilməsi',en:'Reminder settings changed'},
+  'audit.reminder_revoked':{ru:'Отключение напоминаний',az:'Xatırlatmaların söndürülməsi',en:'Reminders disabled'},
+  'audit.recovery_email_requested':{ru:'Подтверждение Email запрошено',az:'Email təsdiqi istənildi',en:'Email verification requested'},
+  'audit.recovery_requested':{ru:'Восстановление пароля запрошено',az:'Şifrənin bərpası istənildi',en:'Password recovery requested'},
+  'audit.recovery_email_verified':{ru:'Email подтверждён',az:'Email təsdiqləndi',en:'Email verified'},
+  'audit.password_recovered':{ru:'Пароль восстановлен',az:'Şifrə bərpa edildi',en:'Password recovered'},
+  'Технические детали':{ru:'Технические детали',az:'Texniki təfərrüatlar',en:'Technical details'}
+ });
  let language='ru';try{const saved=localStorage.getItem('ilkersevim.admin.language');if(['ru','az','en'].includes(saved))language=saved;}catch{}
  const $=s=>document.querySelector(s);
  const bindings=new Set(),boundNodes=new WeakMap();

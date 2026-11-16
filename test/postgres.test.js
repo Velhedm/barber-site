@@ -8,8 +8,9 @@ const {createApp}=require('../server/app');
 // Explicit opt-in: creates and removes its own isolated schema, never touches production bookings.
 test('Neon: two servers, atomic reservations, owner controls, durable sessions and Push jobs', {skip:!process.env.TEST_DATABASE_URL},async()=>{
  const schema='rt_test_'+randomUUID().replaceAll('-','');
+ const original=new URL(process.env.TEST_DATABASE_URL);if(original.hostname!==process.env.TEST_DATABASE_EXPECTED_HOST||original.hostname.replace('-pooler','')==='ep-weathered-surf-b43wbped.c-6.us-east-2.aws.neon.tech')throw new Error('Explicit nonproduction test host required');
  const options={databaseUrl:process.env.TEST_DATABASE_URL,proxyUrl:process.env.HTTPS_PROXY};
- const control=await createDatabase(options);await control.exec('CREATE SCHEMA '+schema);
+ const control=await createDatabase({...options,bootstrapLegacy:false});await control.exec('CREATE SCHEMA '+schema);
  const url=new URL(options.databaseUrl);url.hostname=url.hostname.replace('-pooler','');url.searchParams.set('options','-c search_path='+schema);
  const salt='1234567890abcdef1234567890abcdef';
  const configuration={...options,databaseUrl:url.href,bookingLimit:100,adminHash:salt+':'+scryptSync('test-owner-password',salt,64).toString('hex'),now:()=>Date.parse('2030-01-01T05:00:00Z'),vapid:{...generateVAPIDKeys(),subject:'mailto:test@example.com'},pushSend:async()=>({statusCode:201})};

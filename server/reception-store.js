@@ -112,8 +112,8 @@ async function createReceptionStore(db,base,{now=()=>Date.now(),onChange=async()
    const row=await db.prepare("SELECT id,date,time,status FROM ilker_appointments WHERE id=? AND request_key=? AND kind='booking'").get(id,token);
    if(!row)throw failure(404,'Cancellation link unavailable');
    if(row.status==='cancelled')return {ok:true};
-   const policy=await db.prepare('SELECT cancel_minutes FROM ilker_business_settings WHERE id=1').get();
-   if(row.status!=='active'||Date.parse(`${row.date}T${row.time}:00+04:00`)-policy.cancel_minutes*60000<=now())throw failure(409,'Cancellation unavailable');
+   const policy=await db.prepare('SELECT cancel_minutes FROM ilker_booking_policy WHERE booking_id=?').get(id);
+   if(row.status!=='active'||Date.parse(`${row.date}T${row.time}:00+04:00`)-(policy?.cancel_minutes||0)*60000<=now())throw failure(409,'Cancellation unavailable');
    await db.prepare("UPDATE ilker_appointments SET status='cancelled' WHERE id=?").run(id);
    await bump(id);
    await onChange(id,'cancelled');

@@ -204,6 +204,8 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
         return result;
       }
       if(!internal&&!(await db.prepare('SELECT online FROM ilker_business_settings WHERE id=1').get())?.online)throw failure(409,'Online booking unavailable');
+      const policy=await db.prepare('SELECT cancel_minutes FROM ilker_business_settings WHERE id=1').get();
+      if(!internal&&input.expectedCancellationMinutes!==undefined&&input.expectedCancellationMinutes!==policy.cancel_minutes)throw failure(409,'Cancellation policy changed');
       const {data,master,chosen}=await evaluate(input,{internal});
       if (!data.slots.some(slot => slot.time === input.time && slot.status === 'available')) throw failure(409, 'Time unavailable');
 
@@ -213,6 +215,7 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
       await db.prepare("INSERT INTO ilker_appointments(id,date,time,kind,name,phone,service_id,room,service_name,price_min,price_max,actual_price,duration_minutes,sessions_count,request_key,created_at) VALUES(?,?,?,'booking',?,?,?,?,?,?,?,?,?,?,?,?)")
         .run(id, input.date, input.time, name, phone, ids[0], input.room, chosen.map(item => item.name).join(', '), min, max, min === max ? min : null, data.durationMinutes, chosen.length === 1 ? chosen[0].sessions : 1, input.requestKey, iso());
       await db.prepare('INSERT INTO ilker_booking_assignment(booking_id,master_id,master_name,room_id,room_name) VALUES(?,?,?,?,?)').run(id, master.id, masterLabel(master), master.room_id, master.room_name || null);
+      await db.prepare('INSERT INTO ilker_booking_policy(booking_id,cancel_minutes) VALUES(?,?)').run(id,policy.cancel_minutes);
       await writeItems(id, chosen);
       await onBooked(id,{internal,actor,reminder:input.reminder});
       await audit(actor, 'book', 'booking', id, {masterId: master.id, serviceIds: ids, date: input.date, time: input.time, min, max, duration: data.durationMinutes});

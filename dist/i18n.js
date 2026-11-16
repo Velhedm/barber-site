@@ -1,6 +1,7 @@
 'use strict';
 (() => {
  const dictionary = {
+ "Cancellation policy changed":{"ru":"Правило отмены изменилось. Ознакомьтесь с новым сроком и выберите время ещё раз.","az":"Ləğv qaydası dəyişdi. Yeni müddətlə tanış olun və vaxtı yenidən seçin.","en":"The cancellation policy changed. Review the new deadline and select a time again."},
  "Отмена до начала визита":{"ru":"Онлайн-отмена возможна до начала визита.","az":"Onlayn ləğv ziyarət başlamazdan əvvəl mümkündür.","en":"Online cancellation is available before the visit starts."},
  "Отмена не позднее чем за {minutes} минут":{"ru":"Онлайн-отмена возможна не позднее чем за {minutes} минут до визита.","az":"Onlayn ləğv ziyarətə ən azı {minutes} dəqiqə qalanadək mümkündür.","en":"Online cancellation is available at least {minutes} minutes before the visit."},
  "Online booking unavailable":{"az":"Onlayn rezervasiya müvəqqəti bağlıdır. Zəhmət olmasa, salonla əlaqə saxlayın.","ru":"Онлайн-запись временно закрыта. Пожалуйста, свяжитесь с салоном.","en":"Online booking is temporarily closed. Please contact the salon."},
@@ -787,7 +788,7 @@
  let language='az';
  try {const saved=localStorage.getItem('ilkersevim.language');if(['ru','az','en'].includes(saved))language=saved;else if(saved!==null)localStorage.setItem('ilkersevim.language','az');}catch{/* Language still works when storage is unavailable. */}
  let businessName='',businessPhone='';
- const t=key=>{let value=dictionary[key]?.[language]??key;if(businessName)value=value.replace(/İlker Sevim Barber Club|İlker Sevim|İLKER SEVİM/g,businessName);if(businessPhone)value=value.replace(/\+994 10 321 51 51/g,businessPhone);return value;};
+ const t=key=>{let value=dictionary[key]?.[language]??key;if(businessName)value=value.replace(/İlker Sevim Barber Club|İlker Sevim|İLKER SEVİM/g,()=>businessName);if(businessPhone)value=value.replace(/\+994 10 321 51 51/g,()=>businessPhone);return value;};
  const aliases=new Map();for(const [key,values]of Object.entries(dictionary))for(const value of [key,values.ru,values.az,values.en])aliases.set(value.trim(),key);
  const texts=[],attributes=[];
  const walker=document.createTreeWalker(document.documentElement,NodeFilter.SHOW_TEXT);
