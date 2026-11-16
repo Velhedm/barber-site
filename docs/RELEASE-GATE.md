@@ -19,7 +19,7 @@ Render auto-deploys the former; pushing there would publish unfinished functiona
 5. Run full unit/API/browser/two-instance PostgreSQL tests, then real iPhone PWA/Push checks.
 6. Assign historical unassigned bookings through the stage-2 reschedule action before
    enabling new masters. Unassigned active intervals intentionally block all masters.
-7. Explicit migrations 1–6 (masters, reception/CRM/finance, accounts, Push leases, change events and ordering): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
+7. Explicit migrations 1–7 (masters, reception/CRM/finance, accounts, Push leases, change events, ordering and email recovery): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
    `node scripts/migrate-management.js --apply`. Then review/apply
    `migrations/management-grants.sql` with the database owner, never at app startup.
 8. Only when all release gates pass, deploy tested commit and enable `MANAGEMENT_ENABLED=true`.
@@ -70,7 +70,7 @@ password change. Do not import the environment password again.
 
 Rehearse the transition on a copied branch and retain the prior credential privately
 until the owner has verified access. Do not print it in reports or logs.
-Password recovery email is not implemented yet and blocks final commercial release.
+Password recovery is implemented behind explicit email-provider configuration. Verify the real sender and owner email before enabling it; production delivery is not yet tested.
 
 CRITICAL ROLLBACK: after a database password change, reverting to the legacy binary
 would accept the old environment password. Do not roll back to legacy authentication.

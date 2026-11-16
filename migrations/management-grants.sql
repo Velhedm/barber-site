@@ -23,4 +23,6 @@ GRANT SELECT,INSERT,UPDATE,DELETE ON ilker_push_leases TO ilker_service;
 REVOKE ALL ON ilker_push_changes,ilker_push_change_deliveries FROM PUBLIC;
 GRANT SELECT,INSERT ON ilker_push_changes TO ilker_service;
 GRANT SELECT,INSERT,UPDATE ON ilker_push_change_deliveries TO ilker_service;
+REVOKE ALL ON ilker_recovery_addresses,ilker_recovery_requests FROM PUBLIC;
+GRANT SELECT,INSERT,UPDATE,DELETE ON ilker_recovery_addresses,ilker_recovery_requests TO ilker_service;
 COMMIT;

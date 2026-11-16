@@ -19,7 +19,8 @@ if(process.env.REDIRECT_ORIGIN){
 }
 const runtime=await createApp({preMigrated:Boolean(process.env.DATABASE_URL),verifyIsolation:Boolean(process.env.DATABASE_URL)});const server=runtime.app.listen(Number(process.env.PORT)||3000,'0.0.0.0',()=>console.log('İlker Sevim server started'));
 const timer=process.env.PUSH_WORKER_ENABLED==='false'?null:setInterval(()=>runtime.drainOutbox().catch(()=>console.error('Outbox processing failed')),5000);if(timer){timer.unref();runtime.drainOutbox().catch(()=>console.error('Outbox processing failed'));}
-function stop(){clearInterval(timer);server.close(()=>{runtime.close().then(()=>process.exit(0));});setTimeout(()=>process.exit(1),15000).unref();}
+const emailTimer=setInterval(()=>runtime.drainEmail()?.catch(()=>console.error('Email processing failed')),15000);emailTimer.unref();runtime.drainEmail()?.catch(()=>console.error('Email processing failed'));
+function stop(){clearInterval(timer);clearInterval(emailTimer);server.close(()=>{runtime.close().then(()=>process.exit(0));});setTimeout(()=>process.exit(1),15000).unref();}
 process.on('SIGTERM',stop);process.on('SIGINT',stop);
 
 }

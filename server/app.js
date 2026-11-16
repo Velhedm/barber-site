@@ -17,6 +17,9 @@ const {createManagementStore}=require('./management-store');
 const {migrateManagement}=require('./management-migration');
 const {migrateReception}=require('./reception-migration');
 const {createReceptionStore}=require('./reception-store');
+const {migrateRecovery}=require('./recovery-migration');
+const {createRecoveryStore}=require('./recovery-store');
+const {createEmailProvider}=require('./email-provider');
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 function verifyPassword(password,hash){try{const [salt,key]=hash.split(':');const expected=Buffer.from(key,'hex');const actual=scryptSync(password,salt,64);return expected.length===actual.length&&timingSafeEqual(expected,actual);}catch{return false;}}
@@ -73,6 +76,12 @@ async function createApp(options={}){
  `);
  let access=null;
  if(management){if(options.migrateManagement&&!options.preMigrated){await migrateAccess(db);await migratePush(db);await migratePushChanges(db);await migratePushOrder(db);}if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=6').get())throw new Error('Push migration required');access=await createAccessStore(db,{now,bootstrapHash:adminHash,audit:shop.audit});}
+ let recovery=null;
+ if(management){
+  if(options.migrateManagement&&!options.preMigrated)await migrateRecovery(db);
+  const provider=options.emailProvider||createEmailProvider({key:process.env.RESEND_API_KEY,from:process.env.EMAIL_FROM});
+  recovery=await createRecoveryStore(db,{now,access,audit:shop.audit,provider,key:options.recoveryKey??process.env.RECOVERY_TOKEN_KEY,origin});
+ }
  const hours=Array.from({length:12},(_,i)=>String(9+i).padStart(2,'0')+':00');
  const horizon=365;
  function today(){return new Date(now()+4*3600000).toISOString().slice(0,10);}
@@ -114,6 +123,7 @@ async function createApp(options={}){
   'GET /api/admin/services','POST /api/admin/price','POST /api/admin/complete','GET /api/admin/bookings',
   'GET /api/admin/push/config','POST /api/admin/push/subscribe','POST /api/admin/push/unsubscribe','POST /api/admin/push/test',
   'GET /api/admin/account','GET /api/admin/account/sessions','POST /api/admin/account/password','POST /api/admin/account/preferences','POST /api/admin/account/language','POST /api/admin/account/revoke'
+  ,'GET /api/admin/account/recovery','POST /api/admin/account/recovery'
  ]);
  async function auth(req,res,next){const cookie=req.get('cookie')||'';const sessionToken=cookie.split(';').map(x=>x.trim()).find(x=>x.startsWith('rt_session='))?.slice(11);
   const session=access?await access.session(sessionToken):sessionToken&&(await db.prepare('SELECT * FROM sessions WHERE token_hash=? AND expires>?').get(sha(sessionToken),now()));
@@ -124,6 +134,13 @@ async function createApp(options={}){
   if(access)return requestAccess.run({userId:req.user.id,role:req.user.role,token:session.token_hash},next);next();
  }
  const cookieOptions={httpOnly:true,sameSite:'strict',secure:production,path:'/api/admin'};
+ app.get('/api/admin/recovery/config',async(req,res)=>res.json({enabled:Boolean(recovery?.enabled)}));
+ if(recovery){
+  app.post('/api/admin/recovery/request',limiter(5,15*60000),async(req,res)=>res.json(await recovery.request(req.body)));
+  app.post('/api/admin/recovery/confirm',limiter(10,15*60000),async(req,res)=>res.json(await recovery.consume(req.body)));
+  app.get('/api/admin/account/recovery',auth,async(req,res)=>res.json(await recovery.settings(req.user.id)));
+  app.post('/api/admin/account/recovery',auth,limiter(5,15*60000),async(req,res)=>res.json(await recovery.configure(req.user.id,req.body)));
+ }
  app.post('/api/admin/login',limiter(access?30:5,15*60000),async(req,res)=>{
   if(access){const result=await access.login(req.body,req.ip,req.get('user-agent'));return res.cookie('rt_session',result.raw,{...cookieOptions,maxAge:8*3600000}).json({csrf:result.csrf,user:result.user});}
   if(!adminHash)return res.status(503).json({error:'Настрой ADMIN_PASSWORD_HASH'});
@@ -269,6 +286,6 @@ async function createApp(options={}){
  app.get('/presentation{/:rest}',async(req,res)=>res.redirect('/'+(req.path.endsWith('/')?'':'')));
  app.use(express.static(path.join(__dirname,'../dist'),{index:'index.html'}));
  app.use((error,req,res,next)=>{if(error.status===400&&error.type==='entity.parse.failed')return res.status(400).json({error:'Некорректный JSON'});res.status(error.status||500).json({error:error.status?error.message:'Ошибка сервера. Повтори запрос с теми же данными.'});});
- return {app,db,shop,access,drainOutbox,close:()=>db.close()};
+ return {app,db,shop,access,recovery,drainOutbox,drainEmail:()=>recovery?.drain(),close:()=>db.close()};
 }
 module.exports={createApp,verifyPassword};

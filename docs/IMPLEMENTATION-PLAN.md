@@ -58,7 +58,7 @@ SMS/WhatsApp/email credentials and costs are separate from Web Push.
 
 See `reports/STAGE-1-RU.md`, `reports/VALIDATION.md` and `RELEASE-GATE.md`.
 Rescheduling, reception, CRM and the financial ledger are implemented in stage 2.
-See `reports/STAGE-2-RU.md` and `reports/STAGE-3A-RU.md`. Account roles, password changes, session revocation, client cancellation links and booking-change Push events are implemented. Recovery email, reminders,
+See `reports/STAGE-2-RU.md` and `reports/STAGE-3A-RU.md`. Account roles, password changes, session revocation, client cancellation links and booking-change Push events are implemented. Recovery email provider activation, reminders,
 full admin localization, PWA updates and release verification remain pending in stages 3–4.
 The admin login, navigation, core manual booking dialog, and selected calendar, CRM,
 status, finance, master, service and account-control labels support RU/AZ/EN in development. Dialogs
@@ -71,3 +71,12 @@ The interface-language switch synchronizes the active account's Push language us
 separate authenticated update; it preserves the account's saved privacy preference.
 Real-device verification of localized Push remains a release requirement.
 No claim of completed commercial delivery is made for this branch.
+
+## Recovery / localization update
+
+Explicit admin text bindings now cover the main sections, schedule, account controls,
+Push guidance and common errors. Browser checks verify EN main views, AZ schedule
+labels and preserved drafts. Historical record payloads remain original.
+Migration 7 adds verified recovery email and one-use password reset capabilities,
+with an idempotent leased mail queue. Provider configuration is intentionally absent.
+See `reports/RECOVERY-AND-LOCALIZATION.md`; client reminders are still outstanding.

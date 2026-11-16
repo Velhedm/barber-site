@@ -48,6 +48,7 @@ async function createAccessStore(db,{now=Date.now,bootstrapHash,audit}) {
     await db.prepare('DELETE FROM ilker_sessions WHERE token_hash IN (SELECT token_hash FROM ilker_account_sessions WHERE user_id=?)').run(userId);
     // Revoked credentials also stop future device notifications. The user can subscribe again.
     await db.prepare('DELETE FROM ilker_push_subscriptions WHERE id IN (SELECT subscription_id FROM ilker_push_owners WHERE user_id=?)').run(userId);
+    if(await db.prepare('SELECT version FROM ilker_management_versions WHERE version=7').get())await db.prepare('UPDATE ilker_recovery_requests SET used_at=? WHERE user_id=? AND used_at IS NULL').run(now(),userId);
   }
   async function login(input,ip,ua){
     const login=typeof input.login==='string'?input.login.trim().toLowerCase():'owner';
@@ -150,6 +151,7 @@ async function createAccessStore(db,{now=Date.now,bootstrapHash,audit}) {
     });
   }
   return {login,session,changePassword,saveUser,preferences,language,devices,endSessions,ownsPush,subscribe,unsubscribe,
+    verifyProof:recentProof,assertProof:unchangedProof,revokeSessions:revoke,
     logout,
     users:async actor=>{await owner(actor);return db.prepare('SELECT '+safeColumns+' FROM ilker_users ORDER BY created_at,id').all();},
     events:async(actor,offset=0)=>{await owner(actor);return db.prepare('SELECT id,actor,action,entity_type,entity_id,details_json,created_at FROM ilker_audit ORDER BY created_at DESC,id DESC LIMIT 50 OFFSET ?').all(Math.max(0,Math.min(100000,Math.trunc(Number(offset)||0))));},

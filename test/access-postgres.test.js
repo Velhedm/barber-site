@@ -7,7 +7,7 @@ test('PostgreSQL access: atomic credential import, shared sessions/revocation, r
  try{
   await control.exec('CREATE SCHEMA '+schema);parsed.searchParams.set('options','-c search_path='+schema);
   const password='postgres-synthetic-owner',adminHash=await hashPassword(password),now=()=>Date.parse('2030-01-01T00:00:00Z');
-  const start=async first=>{const r=await createApp({...config,databaseUrl:parsed.href,management:true,migrateManagement:first,preMigrated:!first,production:false,adminHash,now,vapid:{}});runtimes.push(r);return r;};
+  const emails=[];const start=async first=>{const r=await createApp({...config,databaseUrl:parsed.href,management:true,migrateManagement:first,preMigrated:!first,production:false,adminHash,now,vapid:{},origin:'https://synthetic.invalid',recoveryKey:'a'.repeat(64),emailProvider:{configured:true,send:async mail=>emails.push(mail)}});runtimes.push(r);return r;};
   const a=await start(true),[b,c]=await Promise.all([start(false),start(false)]);assert.equal((await a.access.users('owner')).length,1);
   const owner=await a.access.login({password},'owner-ip','iPhone Safari');assert.equal((await b.access.session(owner.raw)).user.id,'owner');
   await Promise.all([b.access.language('owner','az'),c.access.preferences('owner',{pushPrivate:false})]);const preferences=(await a.access.users('owner'))[0];assert.equal(preferences.language,'az');assert.equal(preferences.push_private,0);
@@ -22,5 +22,11 @@ test('PostgreSQL access: atomic credential import, shared sessions/revocation, r
   await a.db.prepare('INSERT INTO ilker_login_attempts(bucket,attempts,resets_at) VALUES(?,10,?)').run('user:'+createHash('sha256').update('pg-throttled').digest('hex'),now()+900000);
   await assert.rejects(c.access.login({login:'pg-throttled',password:'wrong'},'new-ip',''),{status:429});
   const logs=await a.access.events('owner');assert.ok(logs.some(e=>e.action==='password_changed'));assert.ok(!JSON.stringify(logs).includes('postgres-updated-owner'));
+  await a.recovery.configure('owner',{email:'synthetic@example.invalid',currentPassword:'postgres-updated-owner'});
+  await Promise.all([a.drainEmail(),b.drainEmail(),c.drainEmail()]);assert.equal(emails.length,1);
+  const link=mail=>{const [kind,id,token]=new URL(mail.text.match(/https:\/\/synthetic.invalid\/account-recovery.html#[^\s]+/)[0]).hash.slice(1).split('.');return {kind,id,token};};
+  await b.recovery.consume(link(emails[0]));await c.recovery.request({email:'synthetic@example.invalid'});await Promise.all([a.drainEmail(),b.drainEmail()]);assert.equal(emails.length,2);
+  const recovered=await Promise.allSettled([a,b,c].map(r=>r.recovery.consume({...link(emails[1]),newPassword:'postgres-recovered-owner'})));
+  assert.equal(recovered.filter(r=>r.status==='fulfilled').length,1);assert.equal(await c.access.session(next.raw),null);
  }finally{await Promise.all(runtimes.map(r=>r.close()));await control.exec('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await control.close();}
 });

@@ -233,7 +233,7 @@ async function createReceptionStore(db,base,{now=()=>Date.now(),onChange=async()
    let status='off';if(currentMinute!==null&&!closed&&!day.closed){const span=windowOf(day);if(currentMinute>=span.start&&currentMinute<span.end){const point={start:currentMinute,end:currentMinute+1};status='free';if(day.breaks.some(b=>overlaps(point,windowOf(b)))||blocks.some(b=>b.master_id===m.id&&overlaps(point,{start:b.start_minute,end:b.end_minute})))status='blocked';
     if(activeRows.some(b=>(!b.master_id||b.master_id===m.id)&&overlaps(point,{start:minute(b.time),end:minute(b.time)+b.duration_minutes})))status='busy';
     if(status==='free'&&m.room_id){const room=rooms.find(r=>r.id===m.room_id);if(!room||room.archived||activeRows.filter(b=>b.room_id===m.room_id&&overlaps(point,{start:minute(b.time),end:minute(b.time)+b.duration_minutes})).length>=room.capacity)status='blocked';}}}
-   return {id:m.id,name:m.name||`Мастер ${m.position}`,status};});
+   return {id:m.id,name:m.name||`Мастер ${m.position}`,configuredName:m.name,position:m.position,status};});
   const next=rows.find(b=>['active','arrived'].includes(b.status)&&Date.parse(`${value}T${b.time}:00+04:00`)+b.duration_minutes*60000>now());
   const summary=await finance({from:value,to:value});
   return {date:value,count,customers,counts,masterStates,next:next?(await hydrate([next]))[0]:null,rows:await hydrate(rows),truncated:count>500,revenueMinor:summary.totalMinor};

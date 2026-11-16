@@ -26,7 +26,7 @@ test('reception server permissions, CSRF, actor attribution and private account 
  for(const route of ['users','masters','rooms','catalog','duration','clients/anonymize','finance/adjust','delete'])assert.equal((await request(route,{},session)).status,403,route);
  for(const route of ['account','account/sessions','dashboard','clients','management','bookings','services','push/config'])assert.equal((await request(route,undefined,session)).status,200,route);
  assert.equal((await request('dashboard',undefined,session)).body.revenueMinor,undefined);
- for(const route of ['account/password','account/preferences','account/language','account/revoke','users']){
+ for(const route of ['account/password','account/preferences','account/language','account/revoke','account/recovery','users']){
   assert.equal((await request(route,{}, {...owner,csrf:'invalid'})).status,403);assert.equal((await request(route,{})).status,401);
  }
  const created=await request('clients/save',{name:'Synthetic client',phone:'+994500000123',notes:'internal',requestKey:randomUUID(),actor:'owner'},session);assert.equal(created.status,200);
