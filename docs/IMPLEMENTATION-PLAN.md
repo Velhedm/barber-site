@@ -60,10 +60,13 @@ See `reports/STAGE-1-RU.md`, `reports/VALIDATION.md` and `RELEASE-GATE.md`.
 Rescheduling, reception, CRM and the financial ledger are implemented in stage 2.
 See `reports/STAGE-2-RU.md` and `reports/STAGE-3A-RU.md`. Account roles, password changes, session revocation, client cancellation links and booking-change Push events are implemented. Recovery email, reminders,
 full admin localization, PWA updates and release verification remain pending in stages 3–4.
-The admin login, navigation shell and core manual booking dialog support RU/AZ/EN in
-development. The dialog keeps form values, slots and retry state when switching
-language; catalog service labels use their stored translations. Most other dynamic
-sections, some server errors, confirmation prompts and dialog strings remain untranslated.
+The admin login, navigation, core manual booking dialog, and selected calendar, CRM,
+status, finance, master, service and account-control labels support RU/AZ/EN in development. Dialogs
+keep form values, slots and retry state when switching language; catalog service labels
+use their stored translations. Other dynamic sections, some server errors, confirmation
+prompts and dialog strings remain untranslated.
 The language control must not be published as a complete admin translation until those
 are covered.
+Push language currently has its own saved preference; it does not automatically follow
+the interface-language switch. Do not represent that requirement as completed.
 No claim of completed commercial delivery is made for this branch.

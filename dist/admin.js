@@ -130,6 +130,7 @@
  if(standalone())document.querySelector('#install-help').textContent='Приложение уже открыто с главного экрана. После входа можно включить Push.';
  addEventListener('offline',()=>{viewEpoch++;connection(false);clearPrivate();document.querySelector('#dashboard').hidden=true;document.querySelector('#login').hidden=false;status.textContent='Нет интернета. Изменение расписания временно недоступно.';});
  addEventListener('online',restore);document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(csrf)load();else restore();}});
+ document.addEventListener('adminlanguagechange',()=>{bookingsSignature='';scheduleSignature='';if(csrf&&!document.querySelector('.reception-dialog[open]'))load();});
  if(window.isSecureContext&&'serviceWorker'in navigator)getRegistration().catch(()=>{});
  setInterval(load,3000);restore();
 })();

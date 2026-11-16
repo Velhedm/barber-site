@@ -4,17 +4,18 @@ window.IlkerManagement = (() => {
   let api, fail, model, selected = '', busy = false;
   const $ = selector => document.querySelector(selector);
   const name = master => master.name || `Мастер ${master.position}`;
+  const actionLabels=new Set(['+ Добавить мастера','Убрать','+ Перерыв','Сохранить мастера','Архивировать мастера','Клиенты и доход мастера','История','Восстановить','Назад','Следующие 50','Сохранить','Добавить комнату','+ Добавить услугу','Сохранить услугу','Закрыть','Редактировать','Вернуть обычный график','Выходной для мастера','Закрыть время','Открыть время']);
   function node(tag, content, className) {const el = document.createElement(tag); if(content !== undefined) el.textContent = content; if(className) el.className = className; return el;}
   function button(label, fn, primary = false) {
-    const el = node('button', label, primary ? 'button primary' : 'text-button'); el.type = 'button';
+    const el = node('button', label, primary ? 'button primary' : 'text-button');if(actionLabels.has(label))window.IlkerAdminI18n?.bind(el,label); el.type = 'button';
     el.addEventListener('click', async () => {if(busy)return;busy=true;el.disabled=true;try{await fn();}catch(error){fail(error);}finally{busy=false;el.disabled=false;}}); return el;
   }
-  function field(title, type = 'text', value = '') {
+  function field(title, type = 'text', value = '', translate = true) {
     const label = node('label', title), input = node('input');input.type=type;input.value=value??'';
-    if(type === 'text') input.maxLength=100;label.append(input);return {label,input};
+    if(type === 'text') input.maxLength=100;label.append(input);if(translate){window.IlkerAdminI18n?.bind(label,title);input.setAttribute('aria-label',title);window.IlkerAdminI18n?.bind(input,title,'aria-label');}return {label,input};
   }
-  function check(title, checked) {const pair=field(title,'checkbox');pair.label.className='management-check';pair.input.checked=checked;return pair;}
-  function select(title, options, value) {const label=node('label',title),input=node('select');for(const [id,name] of options)input.append(new Option(name,id));input.value=value||'';label.append(input);return {label,input};}
+  function check(title, checked, translate=true) {const pair=field(title,'checkbox','',translate);pair.label.className='management-check';pair.input.checked=checked;return pair;}
+  function select(title, options, value) {const label=node('label',title),input=node('select');for(const [id,name] of options){const option=new Option(name,id);if(title==='Комната / ресурс'&&id==='')window.IlkerAdminI18n?.bind(option,name);input.append(option);}input.value=value||'';label.append(input);window.IlkerAdminI18n?.bind(label,title);input.setAttribute('aria-label',title);window.IlkerAdminI18n?.bind(input,title,'aria-label');return {label,input};}
   function note(text) {return node('p',text,'small-note');}
   async function refresh(){model=await api('/api/admin/management');}
   function saved(){ $('#admin-status').textContent='Изменения сохранены.'; }
@@ -34,7 +35,7 @@ window.IlkerManagement = (() => {
     const room=select('Комната / ресурс',[['','Без ограничения комнаты'],...model.rooms.filter(r=>!r.archived).map(r=>[r.id,r.name])],master.room_id);
     grid.append(displayName.label,step.label,room.label,online.label);form.append(title,grid,note('Новые мастера отключены до настройки. Изменения графика не отменяют ранее созданные визиты. ZAL/VIP — категория цены, комната — отдельный ресурс.'));
     const serviceDetails=node('details',undefined,'management-disclosure'),services=node('fieldset',undefined,'management-services');serviceDetails.append(node('summary',`Услуги мастера · ${master.serviceIds.length}`),services);services.append(node('legend','Выберите услуги'));
-    const choices=model.services.filter(s=>!s.archived).map(s=>{const control=check(s.translations.ru||s.name,master.serviceIds.includes(s.id));services.append(control.label);return {id:s.id,...control};});form.append(serviceDetails);
+    const choices=model.services.filter(s=>!s.archived).map(s=>{const control=check(s.translations.ru||s.name,master.serviceIds.includes(s.id),false);services.append(control.label);return {id:s.id,...control};});form.append(serviceDetails);
     form.append(node('h3','Рабочая неделя'));
     const days=['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
     const rows=master.schedule.map((day,i)=>{
