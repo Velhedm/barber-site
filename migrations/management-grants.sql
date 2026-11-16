@@ -10,4 +10,8 @@ GRANT SELECT,INSERT,UPDATE,DELETE ON ilker_rooms,ilker_masters,ilker_catalog,
  ilker_booking_assignment,ilker_booking_archive TO ilker_service;
 GRANT SELECT,INSERT ON ilker_audit TO ilker_service;
 REVOKE UPDATE,DELETE,TRUNCATE ON ilker_audit FROM ilker_service;
+REVOKE ALL ON ilker_clients,ilker_visit_state,ilker_operations,ilker_finance_entries,ilker_finance_items FROM PUBLIC;
+GRANT SELECT,INSERT,UPDATE ON ilker_clients,ilker_visit_state TO ilker_service;
+GRANT SELECT,INSERT ON ilker_operations,ilker_finance_entries,ilker_finance_items TO ilker_service;
+REVOKE UPDATE,DELETE,TRUNCATE ON ilker_operations,ilker_finance_entries,ilker_finance_items FROM ilker_service;
 COMMIT;

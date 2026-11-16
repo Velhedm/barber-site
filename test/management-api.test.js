@@ -5,10 +5,10 @@ test('management API rejects unauthenticated, CSRF, cross-origin, invalid inputs
  const runtime=await createApp({databaseUrl:'',databasePath:':memory:',management:true,migrateManagement:true,now:()=>Date.parse('2030-01-01T00:00:00Z'),production:false,vapid:{},adminHash:salt+':'+scryptSync('test-owner-password',salt,64).toString('hex')});
  const server=runtime.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));t.after(async()=>{await new Promise(resolve=>server.close(resolve));await runtime.close();});const base='http://127.0.0.1:'+server.address().port;
  async function request(path,body,headers={}){const response=await fetch(base+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)});return {status:response.status,headers:response.headers,data:await response.json()};}
- assert.equal((await request('/api/admin/management')).status,401);
+ for(const route of ['management','clients','finance','dashboard'])assert.equal((await request('/api/admin/'+route)).status,401);
  const login=await request('/api/admin/login',{password:'test-owner-password'});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie').split(';')[0],auth={Cookie:cookie,'X-CSRF-Token':login.data.csrf};
  assert.match(login.headers.get('set-cookie'),/HttpOnly/i);assert.match(login.headers.get('set-cookie'),/SameSite=Strict/i);
- for(const route of ['masters','rooms','catalog','master-block','master-exception']){
+ for(const route of ['masters','rooms','catalog','master-block','master-exception','bookings/create','bookings/reschedule','bookings/status','bookings/comment','clients/save','clients/anonymize','finance/adjust','availability']){
   assert.equal((await request('/api/admin/'+route,{})).status,401);
   assert.equal((await request('/api/admin/'+route,{}, {Cookie:cookie})).status,403);
   assert.equal((await request('/api/admin/'+route,{}, {...auth,Origin:'https://untrusted.invalid'})).status,403);

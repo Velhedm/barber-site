@@ -16,9 +16,9 @@ Render auto-deploys the former; pushing there would publish unfinished functiona
    placeholders and imports existing catalog/settings. It removes the obsolete global
    unique-start index, replacing single-capacity scheduling with transactional checks.
 5. Run full unit/API/browser/two-instance PostgreSQL tests, then real iPhone PWA/Push checks.
-6. Configure/assign historical unassigned bookings before enabling new masters. Until
-   assignment is available, historical active intervals intentionally block all masters.
-7. Explicit migration: `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
+6. Assign historical unassigned bookings through the stage-2 reschedule action before
+   enabling new masters. Unassigned active intervals intentionally block all masters.
+7. Explicit migrations 1 and 2 (masters, then reception/CRM/finance): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
    `node scripts/migrate-management.js --apply`. Then review/apply
    `migrations/management-grants.sql` with the database owner, never at app startup.
 8. Only when all release gates pass, deploy tested commit and enable `MANAGEMENT_ENABLED=true`.
@@ -40,6 +40,6 @@ fail when different masters have legitimate simultaneous starts.
 New store tests use temporary in-memory SQLite with synthetic records.
 PostgreSQL test requires `ILKER_TEST_DATABASE_URL` and matching
 `ILKER_TEST_EXPECTED_HOST`. ONLY point these at a disposable Neon test branch:
-it migrates that branch's copied Ilker tables, creates an isolated synthetic schema and
+it migrates that branch's copied Ilker tables and adds CRM links/opening balances, creates an isolated synthetic schema and
 removes that synthetic schema after the test. It must never run against production.
 No test should use production push credentials or real customer destinations.

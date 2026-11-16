@@ -23,7 +23,7 @@ Deleting cancelled bookings currently deletes historical data. Must become archi
    catalog preserving ZAL/VIP, assignments, schedules, breaks, exceptions, rooms,
    per-master concurrency, legacy protection, server-side validation, admin UI,
    public picker, snapshots, regression/concurrency tests.
-2. **Reception / CRM / finance** (6–9)
+2. **Reception / CRM / finance** — implemented as stage 2, pending final release gates (6–9)
    Dashboard; day/week/month; manual entry, reschedule, attendance, no-show,
    customer normalization/history/anonymization, financial ledger and audit.
 3. **Access / communication / PWA** (5, 10–16)
@@ -57,5 +57,7 @@ SMS/WhatsApp/email credentials and costs are separate from Web Push.
 ## Evidence and scope
 
 See `reports/STAGE-1-RU.md`, `reports/VALIDATION.md` and `RELEASE-GATE.md`.
-Personal cancellation links, rescheduling and all stages 2–4 remain explicit pending work.
+Rescheduling, reception, CRM and the financial ledger are implemented in stage 2.
+See `reports/STAGE-2-RU.md`. Personal cancellation links, account roles, communication,
+full admin localization, PWA updates and release verification remain pending in stages 3–4.
 No claim of completed commercial delivery is made for this branch.

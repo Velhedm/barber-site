@@ -47,9 +47,10 @@ test('30 / 60 / 90 / 120 minute visits and combined services preserve exact leng
     for (let m = 0; m < duration; m += 30) assert.equal(availability.slots.find(s => s.time === `${String(9 + Math.floor(m / 60)).padStart(2, '0')}:${m % 60 ? '30' : '00'}`).status, 'booked');
   }
   await shop.setDuration('haircut', 'zal', 90);
-  const row = await shop.book(booking('master-1', '09:00', {serviceIds: ['haircut', 'beard_cut']}));
+  const originalRequest=booking('master-1','09:00',{serviceIds:['haircut','beard_cut']});
+  const row = await shop.book(originalRequest);
   assert.equal(row.duration_minutes, 120); assert.equal(row.actual_price, 5500); assert.equal(row.items.length, 2);
-  assert.equal((await shop.book({...booking(), requestKey: row.request_key, time: '09:00', serviceIds: ['haircut', 'beard_cut']})).id, row.id);
+  assert.equal((await shop.book({...booking(), requestKey: originalRequest.requestKey, time: '09:00', serviceIds: ['haircut', 'beard_cut']})).id, row.id);
   const s = (await shop.services(true)).find(s => s.id === 'haircut');
   await shop.saveService({...s, name: 'Updated name', options: {zal: {priceMin: 9999, priceMax: 9999, durationMinutes: 30}, vip: {priceMin: 12000, priceMax: 12000, durationMinutes: 30}}});
   const unchanged = await shop.publicResult(row);

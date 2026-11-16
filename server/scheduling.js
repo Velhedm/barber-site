@@ -48,13 +48,13 @@ function roomHasSpace(request, reservations, capacity) {
   let used = 0;
   return events.every(([, change]) => (used += change) < capacity);
 }
-function availableSlots({date, day, step, duration, now, occupied = [], blocked = [], roomReservations = [], capacity = null}) {
+function availableSlots({date, day, step, duration, now, occupied = [], blocked = [], roomReservations = [], capacity = null, allowPastTime = null}) {
   if (day.closed) return [];
   const range = windowOf(day), breaks = day.breaks.map(windowOf), slots = [];
   for (let start = range.start; start < range.end; start += step) {
     const request = {start, end: start + duration}, time = clock(start);
     let status = 'available';
-    if (Date.parse(`${date}T${time}:00+04:00`) <= now) status = 'past';
+    if (time !== allowPastTime && Date.parse(`${date}T${time}:00+04:00`) <= now) status = 'past';
     else if (!Number.isInteger(duration) || duration < 1 || request.end > range.end || [...breaks, ...blocked].some(item => overlaps(request, item))) status = 'blocked';
     else if (occupied.some(item => overlaps(request, item)) || (capacity !== null && !roomHasSpace(request, roomReservations, capacity))) status = 'booked';
     slots.push({time, status});

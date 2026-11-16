@@ -10,6 +10,8 @@ const {prepareIlkerStore}=require('./ilker-store');
 const {catalog}=require('./ilker-services');
 const {createManagementStore}=require('./management-store');
 const {migrateManagement}=require('./management-migration');
+const {migrateReception}=require('./reception-migration');
+const {createReceptionStore}=require('./reception-store');
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 function verifyPassword(password,hash){try{const [salt,key]=hash.split(':');const expected=Buffer.from(key,'hex');const actual=scryptSync(password,salt,64);return expected.length===actual.length&&timingSafeEqual(expected,actual);}catch{return false;}}
@@ -39,15 +41,18 @@ async function createApp(options={}){
  const now=options.now||(()=>Date.now());
 
  const management=options.management??(process.env.MANAGEMENT_ENABLED==='true');
- const onBooked=async bookingId=>{
+ let reception=null;
+ const onBooked=async (bookingId,context)=>{
+  if(reception)await reception.linkCreated(bookingId,context);
   const eventId=randomUUID();await db.prepare('INSERT INTO push_events(id,booking_id,created_at) VALUES(?,?,?)').run(eventId,bookingId,now());
   const subscriptions=await db.prepare('SELECT id FROM push_subscriptions').all();
   for(const sub of subscriptions)await db.prepare('INSERT INTO push_deliveries(id,event_id,subscription_id) VALUES(?,?,?)').run(randomUUID(),eventId,sub.id);
  };
  let shop=await prepareIlkerStore(db,{now,bootstrap:!options.preMigrated,sharedCapacity:!management,onBooked});
  if(management){
-  if(options.migrateManagement&&!options.preMigrated)await migrateManagement(db);
+  if(options.migrateManagement&&!options.preMigrated){await migrateManagement(db);await migrateReception(db);}
   shop=await createManagementStore(db,shop,{now,onBooked});
+  reception=await createReceptionStore(db,shop,{now});shop=reception;
  }
  if(!options.preMigrated)await db.exec(`
  CREATE TABLE IF NOT EXISTS ilker_sessions(token_hash TEXT PRIMARY KEY,csrf TEXT NOT NULL,expires BIGINT NOT NULL);
@@ -102,11 +107,24 @@ async function createApp(options={}){
  app.post('/api/admin/logout',auth,async(req,res)=>{if(typeof req.body.endpoint==='string')(await db.prepare('DELETE FROM push_subscriptions WHERE endpoint=?').run(req.body.endpoint));(await db.prepare('DELETE FROM sessions WHERE token_hash=?').run(req.session.token_hash));res.clearCookie('rt_session',{path:'/api/admin',httpOnly:true,sameSite:'strict',secure:production}).json({ok:true});});
  app.get('/api/admin/day',auth,async(req,res)=>{
   if(!validDate(req.query.date))return res.status(400).json({error:'Некорректная дата'});
-  const rows=await db.prepare("SELECT * FROM slots WHERE date=? AND status='active' ORDER BY time").all(req.query.date);
+  const rows=await db.prepare(management?"SELECT * FROM slots WHERE date=? AND status IN ('active','arrived') ORDER BY time":"SELECT * FROM slots WHERE date=? AND status='active' ORDER BY time").all(req.query.date);
   const itemMap=await shop.itemsFor(rows.filter(row=>row.kind==='booking').map(row=>row.id));const slots=await Promise.all(rows.map(async({request_key,...safe})=>management?{...await shop.publicResult(safe),request_key:undefined}:{...safe,items:itemMap.get(safe.id)||[]}));
   res.json({date:req.query.date,closed:Boolean((await db.prepare('SELECT 1 FROM closed_days WHERE date=?').get(req.query.date))),notificationsEnabled:pushEnabled,slots});
  });
  if(management){
+  // All reception operations inherit the same authentication, CSRF and origin checks.
+  app.post('/api/admin/availability',auth,async(req,res)=>res.json(await shop.adminAvailability(req.body)));
+  app.post('/api/admin/bookings/create',auth,async(req,res)=>res.status(201).json(await shop.book(req.body,{internal:true,actor:'owner'})));
+  app.post('/api/admin/bookings/reschedule',auth,async(req,res)=>res.json(await shop.reschedule(req.body)));
+  app.post('/api/admin/bookings/status',auth,async(req,res)=>res.json(await shop.setStatus(req.body)));
+  app.post('/api/admin/bookings/comment',auth,async(req,res)=>res.json(await shop.comment(req.body)));
+  app.get('/api/admin/dashboard',auth,async(req,res)=>res.json(await shop.dashboard(req.query.date)));
+  app.get('/api/admin/clients',auth,limiter(40),async(req,res)=>res.json(await shop.clients(req.query)));
+  app.post('/api/admin/clients/save',auth,async(req,res)=>res.json(await shop.saveClient(req.body)));
+  app.post('/api/admin/clients/anonymize',auth,async(req,res)=>res.json(await shop.anonymizeClient(req.body)));
+  app.get('/api/admin/finance',auth,async(req,res)=>res.json(await shop.finance(req.query)));
+  app.post('/api/admin/finance/adjust',auth,async(req,res)=>res.json(await shop.adjustFinance(req.body)));
+  app.get('/api/admin/finance/history/:id',auth,async(req,res)=>res.json({rows:await shop.ledgerHistory(req.params.id)}));
   app.get('/api/masters',async(req,res)=>res.json({masters:await shop.eligible({serviceIds:typeof req.query.serviceIds==='string'?req.query.serviceIds.split(','):[],room:req.query.room})}));
   app.get('/api/admin/management',auth,async(req,res)=>res.json({masters:await shop.masters(true),rooms:await shop.rooms(),services:await shop.services(true)}));
   app.post('/api/admin/masters',auth,async(req,res)=>res.json(await shop.saveMaster(req.body)));
@@ -150,6 +168,7 @@ async function createApp(options={}){
   catch(e){if([404,410].includes(e.statusCode))(await db.prepare('DELETE FROM push_subscriptions WHERE id=?').run(row.id));res.status(502).json({error:'Push-сервис не принял сообщение. Проверь подписку и настройки.'});}
  });
  app.get('/api/admin/bookings',auth,async(req,res)=>{
+  if(management)return res.json(await shop.listBookings(req.query));
   const status=['active','cancelled','completed','all'].includes(req.query.status)?req.query.status:'active';
   const offset=Math.max(0,Math.min(1000000,Math.trunc(Number(req.query.offset)||0)));
   const q=typeof req.query.q==='string'?req.query.q.trim().slice(0,80):'';
@@ -162,6 +181,7 @@ async function createApp(options={}){
   const itemMap=await shop.itemsFor(rows.map(row=>row.id));res.json({rows:await Promise.all(rows.map(async row=>management?shop.publicResult(row):({...row,items:itemMap.get(row.id)||[]}))),count,offset});
  });
  app.get('/api/admin/booking/:id',auth,async(req,res)=>{
+  if(management)return res.json(await shop.getBooking(req.params.id));
   const row=(await db.prepare("SELECT id,date,time,status,name,phone,service_id,service_name,room,price_min,price_max,actual_price,duration_minutes,sessions_count,created_at FROM slots WHERE id=? AND kind='booking'").get(req.params.id));
   if(!row)return res.status(404).json({error:'Запись не найдена'});res.json(management?await shop.publicResult(row):{...row,items:await shop.items(row.id)});
  });

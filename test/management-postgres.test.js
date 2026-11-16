@@ -5,6 +5,7 @@ const {randomUUID} = require('node:crypto');
 const {createDatabase} = require('../server/database');
 const {createApp} = require('../server/app');
 const {migrateManagement} = require('../server/management-migration');
+const {migrateReception}=require('../server/reception-migration');
 
 // Isolated schema AND explicit test-branch hostname: no synthetic rows in real tables.
 test('PostgreSQL: migration preserves copied records; independent processes serialize overlapping requests', {skip: !process.env.ILKER_TEST_DATABASE_URL}, async () => {
@@ -22,6 +23,11 @@ test('PostgreSQL: migration preserves copied records; independent processes seri
     const beforeFingerprint=await fingerprints();
     const beforeItems = await control.prepare('SELECT COUNT(*) AS n FROM ilker_booking_items').get();
     await migrateManagement(control);
+    await migrateReception(control);
+    assert.equal((await migrateReception(control)).alreadyApplied,true);
+    const oldRevenue=await control.prepare("SELECT COALESCE(SUM(actual_price),0) AS n FROM ilker_appointments WHERE kind='booking' AND status='completed'").get();
+    const migratedRevenue=await control.prepare("SELECT COALESCE(SUM(amount),0) AS n FROM ilker_finance_entries WHERE reason='opening_balance'").get();
+    assert.equal(migratedRevenue.n,oldRevenue.n);
     assert.equal((await control.prepare('SELECT COUNT(*) AS n FROM ilker_appointments').get()).n, before.n);
     assert.equal((await control.prepare('SELECT COUNT(*) AS n FROM ilker_booking_items').get()).n, beforeItems.n);
     assert.equal((await migrateManagement(control)).alreadyApplied, true);
@@ -48,6 +54,21 @@ test('PostgreSQL: migration preserves copied records; independent processes seri
     const retry = request('master-1','15:00');const first=await a.shop.book(retry);assert.equal((await b.shop.book(retry)).id,first.id);
     await a.shop.cancel(first.id);assert.equal((await b.shop.availabilityInput(retry)).slots.find(s=>s.time==='15:00').status,'available');
     const c=await start();assert.equal((await c.shop.history('master-2')).rows[0].id,independent.id);
+    const beforeMove=await a.shop.getBooking(independent.id),move={id:independent.id,revision:beforeMove.revision,requestKey:randomUUID(),date:'2030-01-03',time:'11:30',masterId:'master-1',room:'zal',serviceIds:['haircut']};
+    const moved=await b.shop.reschedule(move);assert.equal(moved.master_id,'master-1');assert.equal((await a.shop.reschedule(move)).revision,moved.revision);
+    const another=await a.shop.book({...request('master-2','16:00'),date:'2030-01-03'});
+    const competing=await Promise.allSettled([moved,another].map((row,i)=>(i?a:b).shop.reschedule({id:row.id,revision:row.revision,requestKey:randomUUID(),date:'2030-01-04',time:'10:00',masterId:'master-2',room:'zal',serviceIds:['haircut']})));
+    assert.equal(competing.filter(r=>r.status==='fulfilled').length,1);assert.equal(competing.find(r=>r.status==='rejected').reason.status,409);
+    const clients=await c.shop.clients({q:'500000001'});assert.equal(clients.count,1);
+    // Synthetic completed visit predates the fixed clock. Never alter copied public records.
+    const id=randomUUID();await a.db.prepare("INSERT INTO ilker_appointments(id,date,time,kind,status,name,phone,service_id,room,service_name,price_min,price_max,actual_price,duration_minutes,created_at) VALUES(?,'2029-12-31','11:00','booking','completed','Synthetic Test','+994500000001','haircut','zal','Test haircut',3500,3500,3500,90,'2029-12-31')").run(id);
+    await a.db.prepare("INSERT INTO ilker_visit_state(booking_id,client_id) VALUES(?,?)").run(id,clients.rows[0].id);
+    const adjustment={id,revision:1,requestKey:randomUUID(),totalMinor:3500,reason:'correction'};
+    await b.shop.adjustFinance(adjustment);await c.shop.adjustFinance(adjustment);
+    assert.equal((await a.shop.finance({from:'2029-12-31',to:'2029-12-31'})).totalMinor,3500);
+    assert.equal((await a.shop.ledgerHistory(id)).length,1);
+    const share=await a.db.prepare('SELECT SUM(amount) AS n FROM ilker_finance_items').get();assert.equal(share.n,3500);
+
   } finally {
     await Promise.all(runtimes.map(r=>r.close()));
     await control.exec('DROP SCHEMA IF EXISTS '+schema+' CASCADE');

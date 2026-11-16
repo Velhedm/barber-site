@@ -153,9 +153,9 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
     if(!selection(input).every(id=>rows.some(item=>item.service_id===id)))throw failure(409,'Master cannot perform selected services');
     return row;
   }
-  async function evaluate(input, {internal = false, ignoreId = null} = {}) {
+  async function evaluate(input, {internal = false, ignoreId = null, chosenOverride = null, allowPastTime = null} = {}) {
     date(input.date);
-    const master = await checkMaster(input, internal), chosen = await quote(input);
+    const master = await checkMaster(input, internal), chosen = chosenOverride || await quote(input);
     const duration = chosen.reduce((sum, item) => sum + item.durationMinutes, 0);
     const daySettings=await db.prepare('SELECT (SELECT date FROM ilker_closed_days WHERE date=?) AS closed, (SELECT day_json FROM ilker_master_days WHERE master_id=? AND date=?) AS exception').get(input.date,master.id,input.date);
     const day=daySettings.closed?{closed:true}:dayFor(input.date,parse(master.schedule_json),parse(daySettings.exception));
@@ -176,7 +176,7 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
     const room=master.room_id?{capacity:master.room_capacity,archived:master.room_archived}:null;
     if (invalid || (master.room_id && (!room || !room.capacity || room.archived))) blocked.push({start: 0, end: 1440});
     return {master,chosen,data:{date: input.date, masterId: master.id, serverTime: now(), dayClosed: day.closed, durationMinutes: duration,
-      slots: availableSlots({date: input.date, day, step: master.step_minutes, duration, now: now(), occupied, blocked, roomReservations, capacity: room?.capacity ?? null})}};
+      slots: availableSlots({date: input.date, day, step: master.step_minutes, duration, now: now(), occupied, blocked, roomReservations, capacity: room?.capacity ?? null, allowPastTime})}};
   }
   const availabilityInput=async(input,options)=>(await evaluate(input,options)).data;
   const availability = (value, serviceId, room, serviceIds, masterId) => availabilityInput({date: value, serviceId, serviceIds, room, masterId});
@@ -206,12 +206,13 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
       if (!data.slots.some(slot => slot.time === input.time && slot.status === 'available')) throw failure(409, 'Time unavailable');
 
       const id = randomUUID(), min = chosen.reduce((sum, item) => sum + item.priceMin, 0), max = chosen.reduce((sum, item) => sum + item.priceMax, 0);
+      if(!Number.isSafeInteger(min)||!Number.isSafeInteger(max)||max>999999999)throw failure(400,'Invalid actual price');
       if(input.expectedQuote&&(input.expectedQuote.min!==min||input.expectedQuote.max!==max||input.expectedQuote.duration!==data.durationMinutes))throw failure(409,'Quote changed');
       await db.prepare("INSERT INTO ilker_appointments(id,date,time,kind,name,phone,service_id,room,service_name,price_min,price_max,actual_price,duration_minutes,sessions_count,request_key,created_at) VALUES(?,?,?,'booking',?,?,?,?,?,?,?,?,?,?,?,?)")
         .run(id, input.date, input.time, name, phone, ids[0], input.room, chosen.map(item => item.name).join(', '), min, max, min === max ? min : null, data.durationMinutes, chosen.length === 1 ? chosen[0].sessions : 1, input.requestKey, iso());
       await db.prepare('INSERT INTO ilker_booking_assignment(booking_id,master_id,master_name,room_id,room_name) VALUES(?,?,?,?,?)').run(id, master.id, masterLabel(master), master.room_id, master.room_name || null);
       await writeItems(id, chosen);
-      await onBooked(id);
+      await onBooked(id,{internal,actor});
       await audit(actor, 'book', 'booking', id, {masterId: master.id, serviceIds: ids, date: input.date, time: input.time, min, max, duration: data.durationMinutes});
       return publicResult(await db.prepare('SELECT * FROM ilker_appointments WHERE id=?').get(id));
     });
@@ -282,6 +283,6 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
     const revenue = await db.prepare("SELECT COALESCE(SUM(b.actual_price),0) AS total,COUNT(*) AS completed FROM ilker_appointments b JOIN ilker_booking_assignment a ON a.booking_id=b.id WHERE a.master_id=? AND b.kind='booking' AND b.status='completed'").get(masterId);
     return {rows: rows.map(({request_key, ...safe}) => safe), revenue};
   }
-  return {...legacy, masters, rooms, saveRoom, saveMaster, services, saveService, setDuration, eligible, availabilityInput, availability, book, setDay, setException, setBlock, setSlot, dayDetails, cancel, remove, history, publicResult, audit};
+  return {...legacy, planVisit:evaluate, writeItems, masters, rooms, saveRoom, saveMaster, services, saveService, setDuration, eligible, availabilityInput, availability, book, setDay, setException, setBlock, setSlot, dayDetails, cancel, remove, history, publicResult, audit};
 }
 module.exports = {createManagementStore};
