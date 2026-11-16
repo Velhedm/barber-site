@@ -18,7 +18,7 @@ Render auto-deploys the former; pushing there would publish unfinished functiona
 5. Run full unit/API/browser/two-instance PostgreSQL tests, then real iPhone PWA/Push checks.
 6. Assign historical unassigned bookings through the stage-2 reschedule action before
    enabling new masters. Unassigned active intervals intentionally block all masters.
-7. Explicit migrations 1, 2 and 3 (masters, reception/CRM/finance, accounts): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
+7. Explicit migrations 1–4 (masters, reception/CRM/finance, accounts, Push leases): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
    `node scripts/migrate-management.js --apply`. Then review/apply
    `migrations/management-grants.sql` with the database owner, never at app startup.
 8. Only when all release gates pass, deploy tested commit and enable `MANAGEMENT_ENABLED=true`.
@@ -69,6 +69,14 @@ Reception can read individual visit prices and client spending for its daily wor
 cannot access aggregate finance routes, corrections, staff credentials, catalog edits,
 customer anonymization or audit exports. Final owner acceptance of this permission
 matrix is still required before provisioning real receptionist accounts.
+
+## Push delivery leases
+
+Migration 4 adds a temporary, expiring delivery lease shared by server instances.
+Claims are serialized with the existing transaction lock. A worker crash releases its
+claim after five minutes. Delivery remains at-least-once: a crash after the provider
+accepts a Push but before the database records success can cause a duplicate. No claim
+of exactly-once delivery is made. Existing subscriptions and queued deliveries remain.
 
 ## PWA manifests
 

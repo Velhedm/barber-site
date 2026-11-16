@@ -5,7 +5,7 @@
   "description": "Booking application with owner PWA and Web Push",
   "scripts": {
     "start": "node --env-file-if-exists=.env server/index.js",
-    "check": "node --check server/index.js && node --check server/app.js && node --check server/database.js && node --check dist/app.js && node --check dist/admin.js && node --check dist/sw.js && node --check server/scheduling.js && node --check server/management-migration.js && node --check server/management-store.js && node --check dist/management.js && node --check dist/i18n.js && node --check server/reception-domain.js && node --check server/reception-migration.js && node --check server/reception-store.js && node --check dist/reception.js && node --check server/access-migration.js && node --check server/access-store.js && node --check dist/access.js",
+    "check": "node --check server/index.js && node --check server/app.js && node --check server/database.js && node --check dist/app.js && node --check dist/admin.js && node --check dist/sw.js && node --check server/scheduling.js && node --check server/management-migration.js && node --check server/management-store.js && node --check dist/management.js && node --check dist/i18n.js && node --check server/reception-domain.js && node --check server/reception-migration.js && node --check server/reception-store.js && node --check dist/reception.js && node --check server/access-migration.js && node --check server/access-store.js && node --check server/push-migration.js && node --check dist/access.js",
     "test": "node --test test/*.test.js",
     "admin:hash": "node scripts/admin-hash.js",
     "push:keys": "node scripts/push-keys.js"

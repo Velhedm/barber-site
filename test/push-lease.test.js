@@ -1,0 +1,16 @@
+'use strict';
+const {test}=require('node:test');const assert=require('node:assert/strict');
+const {createApp}=require('../server/app');const {hashPassword}=require('../server/access-store');
+const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');const path=require('node:path');const webpush=require('web-push');const {randomUUID}=require('node:crypto');
+test('two workers cannot send the same claimed push concurrently; expired lease is recoverable',async t=>{
+ const dir=mkdtempSync(path.join(tmpdir(),'ilker-push-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const file=path.join(dir,'test.db'),keys=webpush.generateVAPIDKeys();let clock=Date.parse('2030-01-01T00:00:00Z'),sent=0,release,started;
+ const startedPromise=new Promise(r=>started=r);const send=async()=>{sent++;started();await new Promise(r=>release=r);};
+ const config={databaseUrl:'',databasePath:file,management:true,production:false,adminHash:await hashPassword('synthetic-owner-password'),now:()=>clock,vapid:{subject:'mailto:synthetic@example.invalid',publicKey:keys.publicKey,privateKey:keys.privateKey},pushSend:send};
+ const a=await createApp({...config,migrateManagement:true}),b=await createApp({...config,preMigrated:true});t.after(async()=>{await a.close();await b.close();});
+ await a.shop.setDuration('haircut','zal',60);const m=(await a.shop.masters()).find(x=>x.id==='master-1');await a.shop.saveMaster({id:m.id,revision:m.revision,name:'',online:true,archived:false,stepMinutes:30,serviceIds:['haircut'],schedule:Array.from({length:7},()=>({closed:false,start:'09:00',end:'21:00',breaks:[]}))});
+ const sub={endpoint:'https://fcm.googleapis.com/synthetic',keys:{p256dh:'A'.repeat(87),auth:'A'.repeat(22)}};await a.access.subscribe('owner',sub);
+ await a.shop.book({name:'Synthetic',phone:'+994500000001',date:'2030-01-02',time:'11:00',masterId:m.id,serviceIds:['haircut'],room:'zal',requestKey:randomUUID()});
+ const pending=a.drainOutbox();await startedPromise;await b.drainOutbox();assert.equal(sent,1);release();await pending;
+ const row=await a.db.prepare('SELECT id FROM ilker_push_deliveries LIMIT 1').get();await a.db.prepare('UPDATE ilker_push_deliveries SET sent_at=NULL WHERE id=?').run(row.id);await a.db.prepare('INSERT INTO ilker_push_leases(delivery_id,token,expires) VALUES(?,?,?)').run(row.id,'abandoned',clock+1);
+ await b.drainOutbox();assert.equal(sent,1);clock+=2;const retry=b.drainOutbox();while(sent<2)await new Promise(r=>setImmediate(r));release();await retry;assert.equal(sent,2);
+});

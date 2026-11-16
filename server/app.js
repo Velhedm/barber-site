@@ -3,6 +3,7 @@ const express=require('express');
 const {AsyncLocalStorage}=require('node:async_hooks');
 const {createAccessStore}=require('./access-store');
 const {migrateAccess}=require('./access-migration');
+const {migratePush}=require('./push-migration');
 const helmet=require('helmet');
 const {rateLimit}=require('express-rate-limit');
 const {createDatabase}=require('./database');
@@ -69,7 +70,7 @@ async function createApp(options={}){
  CREATE TABLE IF NOT EXISTS ilker_push_deliveries(id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES ilker_push_events(id) ON DELETE CASCADE,subscription_id TEXT NOT NULL REFERENCES ilker_push_subscriptions(id) ON DELETE CASCADE,attempts INTEGER NOT NULL DEFAULT 0,next_attempt BIGINT NOT NULL DEFAULT 0,sent_at BIGINT,last_error TEXT,UNIQUE(event_id,subscription_id));
  `);
  let access=null;
- if(management){if(options.migrateManagement&&!options.preMigrated)await migrateAccess(db);access=await createAccessStore(db,{now,bootstrapHash:adminHash,audit:shop.audit});}
+ if(management){if(options.migrateManagement&&!options.preMigrated){await migrateAccess(db);await migratePush(db);}if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=4').get())throw new Error('Push migration required');access=await createAccessStore(db,{now,bootstrapHash:adminHash,audit:shop.audit});}
  const hours=Array.from({length:12},(_,i)=>String(9+i).padStart(2,'0')+':00');
  const horizon=365;
  function today(){return new Date(now()+4*3600000).toISOString().slice(0,10);}
@@ -228,7 +229,12 @@ async function createApp(options={}){
  app.post('/api/admin/delete',auth,async(req,res)=>res.json(await shop.remove(req.body.id,req.user.id)));
  let draining=false;
  async function drainOutbox(){if(draining||!pushEnabled)return;draining=true;try{
-  const jobs=(await db.prepare("SELECT d.id AS delivery_id,d.attempts,p.subscription,p.id AS subscription_id,s.id AS booking_id,s.date,s.time,s.duration_minutes FROM push_deliveries d JOIN push_events e ON e.id=d.event_id JOIN slots s ON s.id=e.booking_id JOIN push_subscriptions p ON p.id=d.subscription_id WHERE d.sent_at IS NULL AND d.next_attempt<=? AND s.status='active' ORDER BY d.id LIMIT 20").all(now()));
+  const query="SELECT d.id AS delivery_id,d.attempts,p.subscription,p.id AS subscription_id,s.id AS booking_id,s.date,s.time,s.duration_minutes FROM push_deliveries d JOIN push_events e ON e.id=d.event_id JOIN slots s ON s.id=e.booking_id JOIN push_subscriptions p ON p.id=d.subscription_id WHERE d.sent_at IS NULL AND d.next_attempt<=? AND s.status='active'";
+  const jobs=management?await db.transaction(async()=>{
+   const candidates=await db.prepare(query+" AND NOT EXISTS (SELECT 1 FROM ilker_push_leases l WHERE l.delivery_id=d.id AND l.expires>?) ORDER BY d.id LIMIT 20").all(now(),now());
+   for(const job of candidates){job.lease=randomUUID();await db.prepare('INSERT INTO ilker_push_leases(delivery_id,token,expires) VALUES(?,?,?) ON CONFLICT(delivery_id) DO UPDATE SET token=excluded.token,expires=excluded.expires').run(job.delivery_id,job.lease,now()+300000);}
+   return candidates;
+  }):await db.prepare(query+' ORDER BY d.id LIMIT 20').all(now());
   for(const job of jobs){
    if(!(await db.prepare('SELECT 1 FROM push_subscriptions WHERE id=?').get(job.subscription_id))||!(await db.prepare("SELECT 1 FROM slots WHERE id=? AND status='active'").get(job.booking_id)))continue;
    try{
@@ -242,7 +248,7 @@ async function createApp(options={}){
     (await db.prepare('UPDATE push_deliveries SET sent_at=?,last_error=NULL WHERE id=?').run(now(),job.delivery_id));
    }catch(e){if([404,410].includes(e.statusCode)){(await db.prepare('DELETE FROM push_subscriptions WHERE id=?').run(job.subscription_id));continue;}
     const attempts=job.attempts+1;(await db.prepare('UPDATE push_deliveries SET attempts=?,next_attempt=?,last_error=? WHERE id=?').run(attempts,now()+Math.min(3600000,10000*2**Math.min(attempts,8)),'push_unavailable',job.delivery_id));
-   }
+   }finally{if(management)await db.prepare('DELETE FROM ilker_push_leases WHERE delivery_id=? AND token=?').run(job.delivery_id,job.lease);}
   }
  }finally{draining=false;}}
  // Always revalidate the worker and private UI. APIs and private records never enter a Service Worker cache.

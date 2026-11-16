@@ -24,3 +24,13 @@ No credentials or copied client records printed in test output.
 ## Limits
 
 Browser checks use Chromium, not real iOS Safari/PWA. Web Push sends were mocked; no real customer/owner notification was sent. Live iPhone device acceptance is still required. Email recovery/reminders, complete admin localization, general business settings, cancellation links, additional event notifications, icon/PWA updates, backup restore rehearsal and final production security checks remain release blockers. This report is not a claim of complete implementation or absolute security.
+
+## Push concurrency follow-up
+
+Migration 4 was applied on the existing isolated Neon test branch and verified to
+preserve copied appointment and service records. Two separate application instances
+on a synthetic PostgreSQL schema competed for the same delivery; one send occurred.
+Two local application instances also passed the competition and expired-lease recovery
+checks. Push sends were mocked. Default suite: 48 tests, 45 passed, 3 PostgreSQL tests
+skipped; the management PostgreSQL suite passed separately. Exactly-once delivery is
+not guaranteed if the server fails between provider acceptance and recording success.
