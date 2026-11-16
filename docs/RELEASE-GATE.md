@@ -178,6 +178,14 @@ database is unavailable is held in process memory and retried after connectivity
 returns; a process crash before persistence can lose it. Delivery remains at-least-once.
 No exception text, customer data or secrets are included in the notification.
 
+## Isolated iPhone preview
+
+`scripts/preview-server.js` runs only against synthetic in-memory SQLite, ignores
+`DATABASE_URL`, disables email, requires a separate HTTPS origin and separate
+credentials and displays a prominent test notice. See `PREVIEW-IPHONE-RU.md`.
+The process has not been deployed; a temporary HTTPS host is needed for physical
+iPhone acceptance. Do not reuse live VAPID keys or enter real customer details.
+
 ## Backup utility
 
 `scripts/backup-neon.sh` is a packaging helper requiring a PostgreSQL 18-compatible
