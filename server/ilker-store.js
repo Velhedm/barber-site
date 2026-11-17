@@ -12,7 +12,7 @@ function toMinor(amount){
  const [whole,fraction='']=value.split('.');return Number(whole)*100+Number(fraction.padEnd(2,'0'));
 }
 function formatAmount(minor){return (minor/100).toFixed(2);}
-async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},bootstrap=true,sharedCapacity=true}={}){
+async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},beforeBooking=async()=>{},beforeSlot=async()=>{},resolveServices=null,bootstrap=true,sharedCapacity=true}={}){
  if(bootstrap){
  await db.exec(`
  CREATE TABLE IF NOT EXISTS ilker_service_settings(id TEXT PRIMARY KEY,duration_minutes INTEGER);
@@ -44,8 +44,8 @@ async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},boo
   const today=new Date(now()+4*3600000).toISOString().slice(0,10),end=new Date(now()+4*3600000+365*86400000).toISOString().slice(0,10);
   return date>=today&&date<=end;
  }
- function selection(serviceIds,serviceId){const ids=serviceIds===undefined?[serviceId]:serviceIds;if(!Array.isArray(ids)||!ids.length||ids.length>21||ids.some(id=>typeof id!=='string')||new Set(ids).size!==ids.length)throw fail(400,'Unknown service or room');return ids;}
- async function selectedServices(ids,room){const values=new Map((await settings()).map(row=>[row.id,row.duration_minutes]));return ids.map(id=>{let item;try{item=quote(id,room);}catch{throw fail(400,'Unknown service or room');}return {...item,durationMinutes:values.get(id+':'+room)??null};});}
+ function selection(serviceIds,serviceId){const ids=serviceIds===undefined?[serviceId]:serviceIds;if(!Array.isArray(ids)||!ids.length||ids.length>(resolveServices?50:21)||ids.some(id=>typeof id!=='string')||new Set(ids).size!==ids.length)throw fail(400,'Unknown service or room');return ids;}
+ async function selectedServices(ids,room){if(resolveServices)return resolveServices(ids,room);const values=new Map((await settings()).map(row=>[row.id,row.duration_minutes]));return ids.map(id=>{let item;try{item=quote(id,room);}catch{throw fail(400,'Unknown service or room');}return {...item,durationMinutes:values.get(id+':'+room)??null};});}
  async function items(bookingId){return db.prepare('SELECT service_id,service_name,price_min,price_max,duration_minutes,sessions_count FROM ilker_booking_items WHERE booking_id=? ORDER BY position').all(bookingId);}
  async function itemsFor(ids){const result=new Map();if(!ids.length)return result;const rows=await db.prepare(`SELECT booking_id,service_id,service_name,price_min,price_max,duration_minutes,sessions_count FROM ilker_booking_items WHERE booking_id IN (${ids.map(()=>'?').join(',')}) ORDER BY booking_id,position`).all(...ids);for(const {booking_id,...item} of rows){if(!result.has(booking_id))result.set(booking_id,[]);result.get(booking_id).push(item);}return result;}
  async function availability(date,serviceId,room,serviceIds){
@@ -55,7 +55,7 @@ async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},boo
    duration=chosen.some(item=>item.durationMinutes===null)?null:chosen.reduce((sum,item)=>sum+item.durationMinutes,0);
   }
   const dayClosed=Boolean(await db.prepare('SELECT 1 FROM ilker_closed_days WHERE date=?').get(date));
-  const rows=await db.prepare("SELECT time,duration_minutes,kind FROM ilker_appointments WHERE date=? AND status='active'").all(date);
+  const rows=await db.prepare("SELECT time,duration_minutes,kind FROM ilker_appointments WHERE date=? AND status IN ('active','arrived')").all(date);
   const slots=Array.from({length:12},(_,index)=>String(index+9).padStart(2,'0')+':00').map(time=>{
    if(Date.parse(`${date}T${time}:00+04:00`)<=now())return {time,status:'past'};
    if(dayClosed)return {time,status:'blocked'};
@@ -70,10 +70,11 @@ async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},boo
   if(!validDate(date)||typeof closed!=='boolean')throw fail(400,'Invalid day');
   return db.transaction(async()=>{if(closed)await db.prepare('INSERT INTO ilker_closed_days(date) VALUES(?) ON CONFLICT DO NOTHING').run(date);else await db.prepare('DELETE FROM ilker_closed_days WHERE date=?').run(date);return {date,closed};});
  }
- async function setSlot(date,time,blocked){
+ async function setSlot(date,time,blocked,actor){
   if(!validDate(date)||typeof blocked!=='boolean'||!interval(time,60)||Date.parse(`${date}T${time}:00+04:00`)<=now()||!time.endsWith(':00'))throw fail(400,'Invalid slot');
   return db.transaction(async()=>{
-   const rows=await db.prepare("SELECT * FROM ilker_appointments WHERE date=? AND status='active'").all(date);
+   await beforeSlot({date,time,blocked,actor});
+   const rows=await db.prepare("SELECT * FROM ilker_appointments WHERE date=? AND status IN ('active','arrived')").all(date);
    const own=rows.find(row=>row.kind==='block'&&row.time===time);
    if(!blocked){const visit=rows.find(row=>row.kind==='booking'&&overlaps(interval(time,60),interval(row.time,row.duration_minutes)));if(visit)throw fail(409,'Cancel the overlapping booking first');if(own)await db.prepare("UPDATE ilker_appointments SET status='cancelled' WHERE id=?").run(own.id);return {ok:true};}
    if(own)return {ok:true};
@@ -92,15 +93,17 @@ async function prepareIlkerStore(db,{now=()=>Date.now(),onBooked=async()=>{},boo
    const previous=await db.prepare('SELECT * FROM ilker_appointments WHERE request_key=?').get(requestKey);
    if(previous){const oldItems=await items(previous.id);const previousIds=oldItems.length?oldItems.map(item=>item.service_id):[previous.service_id];if(previous.status!=='active'||previous.date!==date||previous.time!==time||JSON.stringify(previousIds)!==JSON.stringify(ids)||previous.room!==room||previous.name!==name||previous.phone!==phone)throw fail(409,'Booking retry differs');return previous;}
    if(Date.parse(`${date}T${time}:00+04:00`)<=now())throw fail(400,'Booking must be in the future');
-   const chosen=await selectedServices(ids,room);if(chosen.some(item=>!item.durationMinutes))throw fail(409,'Service duration must be configured');
-   const duration=chosen.reduce((sum,item)=>sum+item.durationMinutes,0),priceMin=chosen.reduce((sum,item)=>sum+item.priceMin,0),priceMax=chosen.reduce((sum,item)=>sum+item.priceMax,0),fixed=chosen.every(item=>item.actualPrice!==null);
-   const existing=await db.prepare("SELECT time,duration_minutes FROM ilker_appointments WHERE date=? AND status='active'").all(date);
+   await beforeBooking(input);const chosen=await selectedServices(ids,room);if(chosen.some(item=>!item.durationMinutes))throw fail(409,'Service duration must be configured');
+   const duration=chosen.reduce((sum,item)=>sum+item.durationMinutes,0),priceMin=chosen.reduce((sum,item)=>sum+Math.round(item.priceMin*100),0),priceMax=chosen.reduce((sum,item)=>sum+Math.round(item.priceMax*100),0),fixed=chosen.every(item=>item.actualPrice!==null);
+   if(!Number.isSafeInteger(priceMin)||!Number.isSafeInteger(priceMax)||priceMax>999999999)throw fail(400,'Invalid actual price');
+   if(input.expectedQuote&&(input.expectedQuote.min!==priceMin||input.expectedQuote.max!==priceMax||input.expectedQuote.duration!==duration))throw fail(409,'Quote changed');
+   const existing=await db.prepare("SELECT time,duration_minutes FROM ilker_appointments WHERE date=? AND status IN ('active','arrived')").all(date);
    const closed=await db.prepare('SELECT 1 FROM ilker_closed_days WHERE date=?').get(date);
    if(closed||!isAvailable(time,duration,existing.map(row=>({time:row.time,durationMinutes:row.duration_minutes}))))throw fail(409,'Time unavailable');
    const id=randomUUID();
-   await db.prepare("INSERT INTO ilker_appointments(id,date,time,kind,name,phone,service_id,room,service_name,price_min,price_max,actual_price,duration_minutes,sessions_count,request_key,created_at) VALUES(?,?,?,'booking',?,?,?,?,?,?,?,?,?,?,?,?)").run(id,date,time,name,phone,ids[0],room,chosen.map(item=>item.name).join(', '),priceMin*100,priceMax*100,fixed?priceMin*100:null,duration,chosen.length===1?chosen[0].sessions:1,requestKey,new Date(now()).toISOString());
-   for(let i=0;i<chosen.length;i++){const item=chosen[i];await db.prepare('INSERT INTO ilker_booking_items(booking_id,position,service_id,service_name,price_min,price_max,duration_minutes,sessions_count) VALUES(?,?,?,?,?,?,?,?)').run(id,i,item.serviceId,item.name,item.priceMin*100,item.priceMax*100,item.durationMinutes,item.sessions);}
-   await onBooked(id);return db.prepare('SELECT * FROM ilker_appointments WHERE id=?').get(id);
+   await db.prepare("INSERT INTO ilker_appointments(id,date,time,kind,name,phone,service_id,room,service_name,price_min,price_max,actual_price,duration_minutes,sessions_count,request_key,created_at) VALUES(?,?,?,'booking',?,?,?,?,?,?,?,?,?,?,?,?)").run(id,date,time,name,phone,ids[0],room,chosen.map(item=>item.name).join(', '),priceMin,priceMax,fixed?priceMin:null,duration,chosen.length===1?chosen[0].sessions:1,requestKey,new Date(now()).toISOString());
+   for(let i=0;i<chosen.length;i++){const item=chosen[i];await db.prepare('INSERT INTO ilker_booking_items(booking_id,position,service_id,service_name,price_min,price_max,duration_minutes,sessions_count) VALUES(?,?,?,?,?,?,?,?)').run(id,i,item.serviceId,item.name,Math.round(item.priceMin*100),Math.round(item.priceMax*100),item.durationMinutes,item.sessions);}
+   await onBooked(id,{legacy:true,reminder:input.reminder});return db.prepare('SELECT * FROM ilker_appointments WHERE id=?').get(id);
   });
  }
  async function setActualPrice(id,price){

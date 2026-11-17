@@ -13,6 +13,7 @@ const {migrateRecovery}=require('../server/recovery-migration');
 const {migrateReminders}=require('../server/reminders');
 const {migrateBusinessSettings,migrateBookingPolicy}=require('../server/business-settings');
 const {migrateSystemAlerts}=require('../server/system-alerts');
+const {migrateIntakeTransition}=require('../server/intake-transition');
 
 // Isolated schema AND explicit test-branch hostname: no synthetic rows in real tables.
 test('PostgreSQL: migration preserves copied records; independent processes serialize overlapping requests', {skip: !process.env.ILKER_TEST_DATABASE_URL}, async () => {
@@ -43,6 +44,7 @@ test('PostgreSQL: migration preserves copied records; independent processes seri
     await migrateBusinessSettings(control);
     await migrateSystemAlerts(control);
     await migrateBookingPolicy(control);
+    await migrateIntakeTransition(control);
     assert.equal((await migrateReception(control)).alreadyApplied,true);
     const oldRevenue=await control.prepare("SELECT COALESCE(SUM(actual_price),0) AS n FROM ilker_appointments WHERE kind='booking' AND status='completed'").get();
     const migratedRevenue=await control.prepare("SELECT COALESCE(SUM(amount),0) AS n FROM ilker_finance_entries WHERE reason='opening_balance'").get();

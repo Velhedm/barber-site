@@ -27,7 +27,7 @@
  function appointment(row){
   const box=document.createElement('article');box.className='appointment';if(row.id===highlight)box.classList.add('highlight');
   const heading=document.createElement('strong');bind(heading,()=>`${row.date} · ${row.time} · ${tr(row.kind==='block'?'личная блокировка':row.status==='cancelled'?'отменена':row.status==='completed'?'завершена':'запись')}`);box.append(heading);if(row.archived){const badge=document.createElement('span');message(badge,'В архиве');badge.className='small-note';box.append(badge);}
-  if(row.kind==='block')return box;
+  if(row.kind==='block'){if(managementMode){const open=document.createElement('button');open.type='button';open.className='text-button';message(open,'Открыть время');open.addEventListener('click',async()=>{open.disabled=true;try{await action('/api/admin/shared-block/open',{id:row.id});}finally{open.disabled=false;}});box.append(open);}return box;}
   if(managementMode){bind(heading,()=>`${row.date} · ${row.time} · ${window.IlkerReception.statusLabel(row.status)}`);box.dataset.status=row.status;}
   const name=document.createElement('p');name.textContent=row.name;box.append(name);
   const phone=document.createElement('a');phone.textContent=row.phone;phone.href='tel:'+row.phone.replace(/[^+\d]/g,'');box.append(phone);
@@ -62,12 +62,15 @@
  }
  async function loadSchedule(){
   const date=document.querySelector('#admin-date').value;if(!date)return;
+  let dayData=null;
   if(managementMode){
-   await window.IlkerManagement.schedule();const fresh=await api('/api/admin/day?date='+date);if(date!==document.querySelector('#admin-date').value)return;current=fresh;
-   document.querySelector('#close-day').disabled=false;message(document.querySelector('#close-day'),current.closed?'Открыть весь салон':'Закрыть весь салон');
-   const list=current.slots.filter(row=>!row.master_id||row.master_id===window.IlkerManagement.masterId);document.querySelector('#appointments').replaceChildren(...list.map(appointment));return;
+   dayData=await api('/api/admin/day?date='+date);if(date!==document.querySelector('#admin-date').value)return;
+   document.querySelector('#admin-hours').hidden=!dayData.legacyIntake;document.querySelector('#management-schedule').hidden=dayData.legacyIntake;
+   if(!dayData.legacyIntake){await window.IlkerManagement.schedule();if(date!==document.querySelector('#admin-date').value)return;current=dayData;
+    document.querySelector('#close-day').disabled=false;message(document.querySelector('#close-day'),current.closed?'Открыть весь салон':'Закрыть весь салон');
+    const list=current.slots.filter(row=>!row.master_id||row.master_id===window.IlkerManagement.masterId);document.querySelector('#appointments').replaceChildren(...list.map(appointment));return;}
   }
-  const result=await Promise.all([api('/api/admin/day?date='+date),api('/api/availability?date='+date)]);
+  const result=await Promise.all([dayData?Promise.resolve(dayData):api('/api/admin/day?date='+date),api('/api/availability?date='+date)]);
   if(date!==document.querySelector('#admin-date').value)return;[current,availability]=result;
   document.querySelector('#close-day').disabled=false;message(document.querySelector('#close-day'),current.closed?'Открыть день':'Закрыть весь день');
   const signature=JSON.stringify({date,closed:current.closed,slots:current.slots,availability:availability.slots});if(signature===scheduleSignature)return;scheduleSignature=signature;

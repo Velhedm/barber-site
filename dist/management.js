@@ -1,7 +1,7 @@
 'use strict';
 // UI extension of the existing owner panel. API, cookies and CSRF stay in admin.js.
 window.IlkerManagement = (() => {
-  let api, fail, model, selected = '', busy = false;
+  let api, fail, model, selected = '', busy = false,masterEpoch=0,roomEpoch=0,serviceEpoch=0;
   const $ = selector => document.querySelector(selector);
   const tr=(key,params)=>window.IlkerAdminI18n.t(key,params);
   const name = master => master.name || tr('Мастер {number}',{number:master.position});
@@ -27,7 +27,7 @@ window.IlkerManagement = (() => {
   function validate(form){if(!form.reportValidity())throw Object.assign(new Error('Проверьте заполненные поля.'),{status:400});}
   function masterPayload(master){return {id:master.id,revision:master.revision,name:master.name,online:master.online,archived:master.archived,stepMinutes:master.step_minutes,schedule:master.schedule,serviceIds:master.serviceIds,roomId:master.room_id};}
   async function masters(){
-    await refresh();const root=$('#masters-view');root.replaceChildren();
+    const epoch=++masterEpoch,root=$('#masters-view'),fresh=await api('/api/admin/management');if(epoch!==masterEpoch||root.hidden)return;model=fresh;root.replaceChildren();if(model.legacyIntake)root.append(note('Пока работает прежнее общее расписание. После включения первого мастера клиенты будут выбирать мастера; обратное переключение автоматически не выполняется.'));
     const toolbar=node('div',undefined,'management-master-tabs');
     const visible=model.masters.filter(m=>!m.archived);if(!visible.some(m=>m.id===selected))selected=visible[0]?.id||'';
     for(const m of visible){const tab=masterText(button(name(m),async()=>{selected=m.id;await masters();}),m);tab.setAttribute('aria-pressed',String(m.id===selected));toolbar.append(tab);}
@@ -55,6 +55,7 @@ window.IlkerManagement = (() => {
     const actions=node('div',undefined,'action-row management-save-actions');
     actions.append(button('Сохранить мастера',async()=>{
       validate(form);const schedule=rows.map(row=>!row.open.input.checked?{closed:true}:{closed:false,start:row.start.input.value,end:row.end.input.value,breaks:row.breaks.map(b=>({start:b.a.input.value,end:b.b.input.value}))});
+      if(model.legacyIntake&&online.input.checked&&!confirm(tr('Включить выбор мастеров? Услуги без доступного мастера станут недоступны для онлайн-записи. Обратное переключение не выполняется автоматически.')))return;
       await api('/api/admin/masters',{...masterPayload(master),name:displayName.input.value,online:online.input.checked,stepMinutes:Number(step.input.value),roomId:room.input.value||null,schedule,serviceIds:choices.filter(c=>c.input.checked).map(c=>c.id)});saved();await masters();
     },true));
     actions.append(button('Архивировать мастера',async()=>{if(!confirm(tr('Отключить мастера? История и существующие визиты сохранятся.')))return;await api('/api/admin/masters',{...masterPayload(master),online:false,archived:true});saved();await masters();}));
@@ -66,11 +67,11 @@ window.IlkerManagement = (() => {
     for(const row of data.rows){const card=node('article',undefined,'appointment');card.append(bind(node('strong'),()=>`${row.date} · ${row.time} · ${window.IlkerReception.statusLabel(row.status)}`),node('p',row.name),node('p',row.service_name,'appointment-service-name'),node('p',row.phone));root.append(card);}
     const pager=node('div',undefined,'action-row');if(offset)pager.append(button('Назад',()=>history(id,Math.max(0,offset-50))));if(data.rows.length===50)pager.append(button('Следующие 50',()=>history(id,offset+50)));root.append(pager);root.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
   }
-  async function rooms(){await refresh();const root=$('#rooms-view');root.replaceChildren(text('h2','Комнаты и ресурсы'),note('Добавляйте только реальные комнаты. Вместимость ограничивает число одновременных визитов назначенных мастеров.'));
+  async function rooms(){const epoch=++roomEpoch,root=$('#rooms-view'),fresh=await api('/api/admin/management');if(epoch!==roomEpoch||root.hidden)return;model=fresh;root.replaceChildren(text('h2','Комнаты и ресурсы'),note('Добавляйте только реальные комнаты. Вместимость ограничивает число одновременных визитов назначенных мастеров.'));
     function editor(item={name:'',capacity:1,archived:0}){const form=node('form',undefined,'management-form');form.addEventListener('submit',e=>e.preventDefault());const title=field('Название','text',item.name),capacity=field('Одновременных клиентов','number',item.capacity),archived=check('В архиве',Boolean(item.archived));title.input.required=true;capacity.input.min='1';capacity.input.max='99';capacity.input.required=true;form.append(title.label,capacity.label,archived.label,button(item.id?'Сохранить':'Добавить комнату',async()=>{validate(form);await api('/api/admin/rooms',{...item,name:title.input.value,capacity:Number(capacity.input.value),archived:archived.input.checked});saved();await rooms();},true));return form;}
     root.append(editor());for(const room of model.rooms)root.append(editor(room));
   }
-  async function services(){await refresh();const root=$('#services-view');root.replaceChildren(text('h2','Услуги'),note('Цены в AZN. Изменения применяются к новым записям; история сохраняет прежнюю стоимость. Назначить услуги мастеру можно в разделе «Мастера».'));
+  async function services(){const epoch=++serviceEpoch,root=$('#services-view'),fresh=await api('/api/admin/management');if(epoch!==serviceEpoch||root.hidden)return;model=fresh;root.replaceChildren(text('h2','Услуги'),note('Цены в AZN. Изменения применяются к новым записям; история сохраняет прежнюю стоимость. Назначить услуги мастеру можно в разделе «Мастера».'));
     root.append(button('+ Добавить услугу',()=>editor()));
     const editorRoot=node('div');editorRoot.id='catalog-editor';root.append(editorRoot);
     function editor(service){
@@ -100,6 +101,6 @@ window.IlkerManagement = (() => {
   }
   function clock(m){return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;}
   async function init(request,onError){api=request;fail=onError;await refresh();document.querySelectorAll('[data-management-only]').forEach(el=>el.hidden=false);$('#duration-room').closest('.admin-toolbar').hidden=true;$('#admin-hours').hidden=true;}
-  function clear(){model=null;selected='';for(const id of ['masters-view','rooms-view','master-day-controls'])$('#'+id)?.replaceChildren();}
+  function clear(){masterEpoch++;roomEpoch++;serviceEpoch++;model=null;selected='';for(const id of ['masters-view','rooms-view','master-day-controls'])$('#'+id)?.replaceChildren();}
   return {init,masters,rooms,services,schedule,clear,get masterId(){return selected;}};
 })();

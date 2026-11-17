@@ -23,6 +23,7 @@ const {createEmailProvider}=require('./email-provider');
 const {migrateReminders,createReminders}=require('./reminders');
 const {migrateBusinessSettings,createBusinessSettings,migrateBookingPolicy}=require('./business-settings');
 const {migrateSystemAlerts,createSystemAlerts}=require('./system-alerts');
+const {migrateIntakeTransition}=require('./intake-transition');
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 function verifyPassword(password,hash){try{const [salt,key]=hash.split(':');const expected=Buffer.from(key,'hex');const actual=scryptSync(password,salt,64);return expected.length===actual.length&&timingSafeEqual(expected,actual);}catch{return false;}}
@@ -59,14 +60,19 @@ async function createApp(options={}){
  const management=options.management??(process.env.MANAGEMENT_ENABLED==='true');
  const changes=createPushChanges(db,{now,send:pushSend});
  let reception=null,reminders=null,business=null,systemAlerts=null;
- const onBooked=async (bookingId,context)=>{
+ const onBooked=async (bookingId,context={})=>{
   if(reception)await reception.linkCreated(bookingId,context);
   if(reminders)await reminders.consent(bookingId,context.reminder);
+  if(context.legacy&&business){const policy=await business.get();await db.prepare('INSERT INTO ilker_booking_policy(booking_id,cancel_minutes) VALUES(?,?)').run(bookingId,policy.cancel_minutes);await shop.audit('public','book','booking',bookingId,{legacyIntake:true});}
   const eventId=randomUUID();await db.prepare('INSERT INTO push_events(id,booking_id,created_at) VALUES(?,?,?)').run(eventId,bookingId,now());
   const subscriptions=await db.prepare('SELECT id FROM push_subscriptions').all();
   for(const sub of subscriptions)await db.prepare('INSERT INTO push_deliveries(id,event_id,subscription_id) VALUES(?,?,?)').run(randomUUID(),eventId,sub.id);
  };
- let shop=await prepareIlkerStore(db,{now,bootstrap:!options.preMigrated,sharedCapacity:!management,onBooked});
+ const transitionActive=async()=>Boolean((await db.prepare('SELECT legacy FROM ilker_intake_transition WHERE id=1').get())?.legacy);
+ const resolveServices=management?async(ids,room)=>{if(!['zal','vip'].includes(room))throw fail(400,'Unknown service or room');const rows=await db.prepare(`SELECT c.id,c.name,c.sessions_count,o.price_min,o.price_max,o.duration_minutes FROM ilker_catalog c JOIN ilker_catalog_options o ON o.service_id=c.id WHERE c.active=1 AND c.archived=0 AND o.category=? AND c.id IN (${ids.map(()=>'?').join(',')})`).all(room,...ids);return ids.map(id=>{const row=rows.find(x=>x.id===id);if(!row)throw fail(409,'Service unavailable');return {serviceId:id,name:row.name,priceMin:row.price_min/100,priceMax:row.price_max/100,actualPrice:row.price_min===row.price_max?row.price_min/100:null,durationMinutes:row.duration_minutes,sessions:row.sessions_count};});}:null;
+ const beforeBooking=management?async(input)=>{if(!await transitionActive())throw fail(409,'Booking mode changed');const config=await business.get();if(!config.online)throw fail(409,'Online booking unavailable');if(input.expectedCancellationMinutes!==undefined&&input.expectedCancellationMinutes!==config.cancel_minutes)throw fail(409,'Cancellation policy changed');}:undefined;
+ const beforeSlot=management?async(input)=>{if(!await transitionActive())throw fail(409,'Booking mode changed');await shop.audit(input.actor,'block','salon',input.date,{time:input.time,blocked:input.blocked,legacyIntake:true});}:undefined;
+ const legacyShop=await prepareIlkerStore(db,{now,bootstrap:!options.preMigrated,sharedCapacity:!management,onBooked,beforeBooking,beforeSlot,resolveServices});let shop=legacyShop;
  if(management){
   if(options.migrateManagement&&!options.preMigrated){await migrateManagement(db);await migrateReception(db);}
   shop=await createManagementStore(db,shop,{now,onBooked});
@@ -96,6 +102,8 @@ async function createApp(options={}){
   systemAlerts=createSystemAlerts(db,{now,send:pushSend});
   if(options.migrateManagement&&!options.preMigrated)await migrateBookingPolicy(db);
   if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=11').get())throw new Error('Booking policy migration required');
+  if(options.migrateManagement&&!options.preMigrated)await migrateIntakeTransition(db);
+  if(!await db.prepare('SELECT version FROM ilker_management_versions WHERE version=12').get())throw new Error('Intake transition migration required');
  }
  const hours=Array.from({length:12},(_,i)=>String(9+i).padStart(2,'0')+':00');
  const horizon=365;
@@ -125,21 +133,21 @@ async function createApp(options={}){
   const rows=await shop.settings();const durations=Object.fromEntries(rows.map(row=>[row.id,row.duration_minutes]));
   const services=management?await shop.services():catalog.categories.flatMap(group=>group.services.map(item=>({id:item.id,name:item.name,translations:item.translations,group:group.id,groupName:group.name,groupTranslations:group.translations,prices:{zal:item.zal,vip:item.vip},durations:{zal:durations[item.id+':zal'],vip:durations[item.id+':vip']},zalNote:item.zal_note||null})));
   const reminderConfig=management?await reminders.settings():null;
-  res.json({management,brand:catalog.brand,business:business?await business.get():null,serverTime:now(),timezone:'Asia/Baku',hours,services,notificationsEnabled:pushEnabled,remindersEnabled:Boolean(reminderConfig?.enabled&&reminderConfig.providerConfigured),maxDaysAhead:horizon});
+  res.json({management,clientMasterMode:management?!await transitionActive():false,brand:catalog.brand,business:business?await business.get():null,serverTime:now(),timezone:'Asia/Baku',hours,services,notificationsEnabled:pushEnabled,remindersEnabled:Boolean(reminderConfig?.enabled&&reminderConfig.providerConfigured),maxDaysAhead:horizon});
  });
  app.get('/api/availability',async(req,res)=>{
   const ids=typeof req.query.serviceIds==='string'?req.query.serviceIds.split(','):undefined;
-  const data=await shop.availability(req.query.date,req.query.serviceId,req.query.room,ids,req.query.masterId);res.json(data);
+  const active=management&&await transitionActive();if(management&&!active&&!req.query.masterId)throw fail(409,'Booking mode changed');const data=await (active?legacyShop:shop).availability(req.query.date,req.query.serviceId,req.query.room,ids,req.query.masterId);res.json(data);
  });
  app.post('/api/bookings',limiter(options.bookingLimit||12,10*60000),async(req,res)=>{
-  const booking=await shop.book(req.body);res.status(201).json({id:booking.id,date:booking.date,time:booking.time,serviceId:booking.service_id,room:booking.room,durationMinutes:booking.duration_minutes,status:'confirmed',...(management?{masterId:booking.master_id,masterName:booking.master_name,priceMin:booking.price_min,priceMax:booking.price_max,items:booking.items}: {})});
+  const useLegacy=management&&!req.body.masterId;const booking=await (useLegacy?legacyShop:shop).book(req.body);const items=management?(booking.items||await legacyShop.items(booking.id)):undefined;res.status(201).json({id:booking.id,date:booking.date,time:booking.time,serviceId:booking.service_id,room:booking.room,durationMinutes:booking.duration_minutes,status:'confirmed',...(management?{masterId:booking.master_id||null,masterName:booking.master_name||null,priceMin:booking.price_min,priceMax:booking.price_max,items}: {})});
  });
  if(management)app.post('/api/bookings/cancel',limiter(6,10*60000),async(req,res)=>res.json(await shop.cancelByClient(req.body.id,req.body.token)));
  const receptionRoutes=new Set([
   'GET /api/admin/session','POST /api/admin/logout','GET /api/admin/day','POST /api/admin/day','POST /api/admin/slot',
   'POST /api/admin/availability','POST /api/admin/bookings/create','POST /api/admin/bookings/reschedule','POST /api/admin/bookings/status','POST /api/admin/bookings/comment','POST /api/admin/bookings/reminders/revoke',
   'GET /api/admin/dashboard','GET /api/admin/clients','POST /api/admin/clients/save','GET /api/admin/management',
-  'POST /api/admin/master-exception','POST /api/admin/master-block','GET /api/admin/master-day','POST /api/admin/cancel',
+  'POST /api/admin/master-exception','POST /api/admin/master-block','GET /api/admin/master-day','POST /api/admin/cancel','POST /api/admin/shared-block/open',
   'GET /api/admin/services','POST /api/admin/price','POST /api/admin/complete','GET /api/admin/bookings',
   'GET /api/admin/push/config','POST /api/admin/push/subscribe','POST /api/admin/push/unsubscribe','POST /api/admin/push/test',
   'GET /api/admin/account','GET /api/admin/account/sessions','POST /api/admin/account/password','POST /api/admin/account/preferences','POST /api/admin/account/language','POST /api/admin/account/revoke'
@@ -195,7 +203,7 @@ async function createApp(options={}){
   if(!validDate(req.query.date))return res.status(400).json({error:'Некорректная дата'});
   const rows=await db.prepare(management?"SELECT * FROM slots WHERE date=? AND status IN ('active','arrived') ORDER BY time":"SELECT * FROM slots WHERE date=? AND status='active' ORDER BY time").all(req.query.date);
   const itemMap=await shop.itemsFor(rows.filter(row=>row.kind==='booking').map(row=>row.id));const slots=await Promise.all(rows.map(async({request_key,...safe})=>management?{...await shop.publicResult(safe),request_key:undefined}:{...safe,items:itemMap.get(safe.id)||[]}));
-  res.json({date:req.query.date,closed:Boolean((await db.prepare('SELECT 1 FROM closed_days WHERE date=?').get(req.query.date))),notificationsEnabled:pushEnabled,slots});
+  res.json({date:req.query.date,closed:Boolean((await db.prepare('SELECT 1 FROM closed_days WHERE date=?').get(req.query.date))),legacyIntake:management?await transitionActive():true,notificationsEnabled:pushEnabled,slots});
  });
  if(management){
   // All reception operations inherit the same authentication, CSRF and origin checks.
@@ -212,16 +220,17 @@ async function createApp(options={}){
   app.post('/api/admin/finance/adjust',auth,async(req,res)=>res.json(await shop.adjustFinance(req.body,req.user.id)));
   app.get('/api/admin/finance/history/:id',auth,async(req,res)=>res.json({rows:await shop.ledgerHistory(req.params.id)}));
   app.get('/api/masters',async(req,res)=>res.json({masters:await shop.eligible({serviceIds:typeof req.query.serviceIds==='string'?req.query.serviceIds.split(','):[],room:req.query.room})}));
-  app.get('/api/admin/management',auth,async(req,res)=>res.json({masters:await shop.masters(true),rooms:await shop.rooms(),services:await shop.services(true)}));
+  app.get('/api/admin/management',auth,async(req,res)=>res.json({masters:await shop.masters(true),rooms:await shop.rooms(),services:await shop.services(true),legacyIntake:await transitionActive()}));
   app.post('/api/admin/masters',auth,async(req,res)=>res.json(await shop.saveMaster(req.body,req.user.id)));
   app.post('/api/admin/rooms',auth,async(req,res)=>res.json(await shop.saveRoom(req.body,req.user.id)));
   app.post('/api/admin/catalog',auth,async(req,res)=>res.json(await shop.saveService(req.body,req.user.id)));
   app.post('/api/admin/master-exception',auth,async(req,res)=>res.json(await shop.setException(req.body,req.user.id)));
   app.post('/api/admin/master-block',auth,async(req,res)=>res.json(await shop.setBlock(req.body,req.user.id)));
+  app.post('/api/admin/shared-block/open',auth,async(req,res)=>res.json(await shop.openSharedBlock(req.body.id,req.user.id)));
   app.get('/api/admin/master-day',auth,async(req,res)=>res.json(await shop.dayDetails(req.query.masterId,req.query.date)));
   app.get('/api/admin/master-history',auth,async(req,res)=>res.json(await shop.history(req.query.masterId,Number(req.query.offset||0))));
  }
- app.post('/api/admin/slot',auth,async(req,res)=>res.json(await shop.setSlot(req.body.date,req.body.time,req.body.blocked,req.body.masterId,req.user.id)));
+ app.post('/api/admin/slot',auth,async(req,res)=>res.json(management&&!req.body.masterId?await legacyShop.setSlot(req.body.date,req.body.time,req.body.blocked,req.user.id):await shop.setSlot(req.body.date,req.body.time,req.body.blocked,req.body.masterId,req.user.id)));
  app.post('/api/admin/day',auth,async(req,res)=>res.json(await shop.setDay(req.body.date,req.body.closed,req.body.masterId,req.user.id)));
  app.post('/api/admin/cancel',auth,async(req,res)=>res.json(await shop.cancel(req.body.id,req.user.id)));
  app.get('/api/admin/services',auth,async(req,res)=>res.json({services:await shop.settings()}));

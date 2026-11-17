@@ -1,0 +1,21 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUUID}=require('node:crypto');
+const {createDatabase}=require('../server/database'),{createApp}=require('../server/app'),{hashPassword}=require('../server/access-store');
+test('PostgreSQL serializes shared intake, activation and independent masters',{skip:!process.env.ILKER_TEST_DATABASE_URL},async()=>{
+ const url=new URL(process.env.ILKER_TEST_DATABASE_URL);if(url.hostname!==process.env.ILKER_TEST_EXPECTED_HOST||url.hostname.replace('-pooler','')==='ep-weathered-surf-b43wbped.c-6.us-east-2.aws.neon.tech')throw new Error('Explicit nonproduction test host required');url.hostname=url.hostname.replace('-pooler','');
+ const base={databaseUrl:url.href,bootstrapLegacy:false,proxyUrl:process.env.HTTPS_PROXY},control=await createDatabase(base),schema='ilker_transition_test_'+randomUUID().replaceAll('-',''),runtimes=[],servers=[];
+ try{await control.exec('CREATE SCHEMA '+schema);url.searchParams.set('options','-c search_path='+schema);const hash=await hashPassword('synthetic-owner-password'),now=()=>Date.parse('2030-01-01T00:00:00Z');
+  async function start(first){const r=await createApp({...base,databaseUrl:url.href,management:true,migrateManagement:first,preMigrated:!first,production:false,adminHash:hash,now,vapid:{},bookingLimit:100});runtimes.push(r);const server=r.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));servers.push(server);return {r,url:'http://127.0.0.1:'+server.address().port};}
+  const a=await start(true),b=await start(false);await a.r.shop.setDuration('haircut','zal',90);const payload=()=>({name:'Synthetic',phone:'+994500000111',date:'2030-01-02',time:'11:00',room:'zal',serviceIds:['haircut'],requestKey:randomUUID()});
+  const login=await fetch(a.url+'/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'synthetic-owner-password'})}),credentials=await login.json(),auth={Cookie:login.headers.get('set-cookie').split(';')[0],'X-CSRF-Token':credentials.csrf,'Content-Type':'application/json'};
+  const blocked=await fetch(a.url+'/api/admin/slot',{method:'POST',headers:auth,body:JSON.stringify({date:'2030-01-02',time:'09:00',blocked:true})});assert.equal(blocked.status,200);
+  const day=await(await fetch(a.url+'/api/admin/day?date=2030-01-02',{headers:auth})).json(),block=day.slots.find(x=>x.kind==='block'&&x.time==='09:00');assert.ok(block);
+  const send=async(instance,body)=>{const response=await fetch(instance.url+'/api/bookings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return {status:response.status,body:await response.json()};};
+  const concurrent=await Promise.all(Array.from({length:8},(_,i)=>send(i%2?a:b,payload())));assert.equal(concurrent.filter(x=>x.status===201).length,1);assert.equal(concurrent.filter(x=>x.status===409).length,7);
+  const first=(await a.r.shop.masters())[0],activation={id:first.id,revision:first.revision,name:'',online:true,archived:false,stepMinutes:30,serviceIds:['haircut'],schedule:Array.from({length:7},()=>({closed:false,start:'09:00',end:'21:00',breaks:[]}))};
+  const candidate={...payload(),time:'15:00'},[enabled,attempt]=await Promise.all([a.r.shop.saveMaster(activation),send(b,candidate)]);assert.ok([201,409].includes(attempt.status));
+  const slots=await a.r.shop.availability('2030-01-02',undefined,'zal',['haircut'],enabled.id);assert.notEqual(slots.slots.find(s=>s.time==='11:00').status,'available');if(attempt.status===201)assert.notEqual(slots.slots.find(s=>s.time==='15:00').status,'available');
+  assert.notEqual(slots.slots.find(s=>s.time==='09:00').status,'available');const opened=await fetch(a.url+'/api/admin/shared-block/open',{method:'POST',headers:auth,body:JSON.stringify({id:block.id})});assert.equal(opened.status,200);assert.equal((await a.r.shop.availability('2030-01-02',undefined,'zal',['haircut'],enabled.id)).slots.find(s=>s.time==='09:00').status,'available');
+  assert.equal((await a.r.shop.listBookings()).count,1+(attempt.status===201?1:0));
+ }finally{await Promise.all(servers.map(s=>new Promise(resolve=>s.close(resolve))));await Promise.all(runtimes.map(r=>r.close()));await control.exec('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await control.close();}
+});

@@ -19,7 +19,7 @@ Render auto-deploys the former; pushing there would publish unfinished functiona
 5. Run full unit/API/browser/two-instance PostgreSQL tests, then real iPhone PWA/Push checks.
 6. Assign historical unassigned bookings through the stage-2 reschedule action before
    enabling new masters. Unassigned active intervals intentionally block all masters.
-7. Explicit migrations 1–11 (masters, reception/CRM/finance, accounts, Push leases, change events, ordering, email recovery, reminders, business settings, system alerts and booking-policy snapshots): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
+7. Explicit migrations 1–12 (masters, reception/CRM/finance, accounts, Push leases, change events, ordering, email recovery, reminders, business settings, system alerts, booking-policy snapshots and transition state): `ILKER_MIGRATION_DATABASE_URL`, `ILKER_MIGRATION_EXPECTED_HOST`,
    `node scripts/migrate-management.js --apply`. Then review/apply
    `migrations/management-grants.sql` with the database owner, never at app startup.
 8. Only when all release gates pass, deploy tested commit and enable `MANAGEMENT_ENABLED=true`.
@@ -202,3 +202,17 @@ remain mandatory.
 Migration 11 preserves the cancellation cutoff in effect when a new booking is made.
 Legacy bookings without a snapshot retain cancellation until the start of the visit.
 A changed policy is rechecked before booking; existing snapshots are never overwritten.
+
+## Shared-to-master intake transition
+
+Migration 12 preserves the existing shared 09:00–21:00 booking flow until an owner
+enables the first configured master. The admin interface still uses the new management
+features. The first enabled master must offer at least one active service whose configured
+duration fits a working day; this prevents switching to an entirely unusable calendar.
+After the first master goes online, the public site requires master selection. Disabling
+all masters does not silently reopen shared intake. Legacy bookings remain unassigned
+and conservatively block every master until assigned. Intake mode, activation, booking
+checks and writes use the same PostgreSQL advisory transaction lock. A stale public
+page receives a clear conflict and must refresh; idempotent booking retries still work.
+Transition uses current managed prices, durations, snapshots and client linkage.
+This behavior is staged and requires the full release tests before production.

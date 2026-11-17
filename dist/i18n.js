@@ -1,6 +1,7 @@
 'use strict';
 (() => {
  const dictionary = {
+ "Booking mode changed":{"ru":"Расписание обновилось. Обновите страницу, чтобы выбрать мастера.","az":"İş cədvəli dəyişdi. Usta seçmək üçün səhifəni yeniləyin.","en":"The schedule changed. Refresh the page to choose a barber."},
  "Cancellation policy changed":{"ru":"Правило отмены изменилось. Ознакомьтесь с новым сроком и выберите время ещё раз.","az":"Ləğv qaydası dəyişdi. Yeni müddətlə tanış olun və vaxtı yenidən seçin.","en":"The cancellation policy changed. Review the new deadline and select a time again."},
  "Отмена до начала визита":{"ru":"Онлайн-отмена возможна до начала визита.","az":"Onlayn ləğv ziyarət başlamazdan əvvəl mümkündür.","en":"Online cancellation is available before the visit starts."},
  "Отмена не позднее чем за {minutes} минут":{"ru":"Онлайн-отмена возможна не позднее чем за {minutes} минут до визита.","az":"Onlayn ləğv ziyarətə ən azı {minutes} dəqiqə qalanadək mümkündür.","en":"Online cancellation is available at least {minutes} minutes before the visit."},

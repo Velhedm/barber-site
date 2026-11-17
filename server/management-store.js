@@ -65,6 +65,11 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
     return db.transaction(async () => {
       for (const id of input.serviceIds) if (!await db.prepare('SELECT id FROM ilker_catalog WHERE id=? AND archived=0').get(id)) throw failure(400, 'Unknown service or room');
       if (input.roomId && !await db.prepare('SELECT id FROM ilker_rooms WHERE id=? AND archived=0').get(input.roomId)) throw failure(400, 'Unknown service or room');
+      if(online&&(await db.prepare('SELECT legacy FROM ilker_intake_transition WHERE id=1').get())?.legacy){
+        const options=await db.prepare(`SELECT o.duration_minutes FROM ilker_catalog_options o JOIN ilker_catalog c ON c.id=o.service_id WHERE c.active=1 AND c.archived=0 AND o.duration_minutes IS NOT NULL AND c.id IN (${input.serviceIds.map(()=>'?').join(',')})`).all(...input.serviceIds);
+        const bookable=options.some(option=>week.some(day=>!day.closed&&availableSlots({date:'2099-01-05',day,step,duration:option.duration_minutes,now:0}).some(slot=>slot.status==='available')));
+        if(!bookable)throw failure(400,'Configure bookable service first');
+      }
       const id = input.id || randomUUID(), room = input.roomId || null;
       if (input.id) await changed(await db.prepare('UPDATE ilker_masters SET name=?,online=?,archived=?,step_minutes=?,schedule_json=?,room_id=?,revision=revision+1 WHERE id=? AND revision=?').run(name, online, archived, step, JSON.stringify(week), room, id, input.revision));
       else {
@@ -73,6 +78,7 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
       }
       await db.prepare('DELETE FROM ilker_master_services WHERE master_id=?').run(id);
       for (const serviceId of input.serviceIds) await db.prepare('INSERT INTO ilker_master_services(master_id,service_id) VALUES(?,?)').run(id, serviceId);
+      if(online)await db.prepare('UPDATE ilker_intake_transition SET legacy=0 WHERE id=1 AND legacy=1').run();
       await audit(actor, archived ? 'archive' : 'save', 'master', id, {online, archived, step, serviceIds: input.serviceIds, roomId: room, schedule: week});
       return (await masters(true)).find(row => row.id === id);
     });
@@ -262,6 +268,10 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
     if (!masterId) throw failure(400, 'Select a master');
     return setBlock({masterId, date: value, start: time, end: clock(minute(time) + 60), blocked}, actor);
   }
+  async function openSharedBlock(id,actor){
+    if(typeof id!=='string'||!/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id))throw failure(400,'Invalid details');
+    return db.transaction(async()=>{const row=await db.prepare("SELECT b.id,b.date,b.time,b.status FROM ilker_appointments b LEFT JOIN ilker_booking_assignment a ON a.booking_id=b.id WHERE b.id=? AND b.kind='block' AND a.master_id IS NULL").get(id);if(!row)throw failure(404,'Block not found');if(row.status==='active'){await db.prepare("UPDATE ilker_appointments SET status='cancelled' WHERE id=? AND kind='block' AND status='active'").run(id);await audit(actor,'block','salon',row.date,{time:row.time,blocked:false,legacyIntake:true});}return {ok:true};});
+  }
   async function cancel(id, actor) {
     return db.transaction(async () => {
       const row = await db.prepare("SELECT * FROM ilker_appointments WHERE id=? AND kind='booking'").get(id);
@@ -288,6 +298,6 @@ async function createManagementStore(db, legacy, {now = () => Date.now(), onBook
     const revenue = await db.prepare("SELECT COALESCE(SUM(b.actual_price),0) AS total,COUNT(*) AS completed FROM ilker_appointments b JOIN ilker_booking_assignment a ON a.booking_id=b.id WHERE a.master_id=? AND b.kind='booking' AND b.status='completed'").get(masterId);
     return {rows: rows.map(({request_key, ...safe}) => safe), revenue};
   }
-  return {...legacy, planVisit:evaluate, writeItems, masters, rooms, saveRoom, saveMaster, services, saveService, setDuration, eligible, availabilityInput, availability, book, setDay, setException, setBlock, setSlot, dayDetails, cancel, remove, history, publicResult, audit};
+  return {...legacy, planVisit:evaluate, writeItems, masters, rooms, saveRoom, saveMaster, services, saveService, setDuration, eligible, availabilityInput, availability, book, setDay, setException, setBlock, setSlot, openSharedBlock, dayDetails, cancel, remove, history, publicResult, audit};
 }
 module.exports = {createManagementStore};

@@ -34,4 +34,6 @@ GRANT SELECT,INSERT ON ilker_system_alerts TO ilker_service;
 GRANT SELECT,INSERT,UPDATE ON ilker_system_alert_deliveries TO ilker_service;
 REVOKE ALL ON ilker_booking_policy FROM PUBLIC;
 GRANT SELECT,INSERT ON ilker_booking_policy TO ilker_service;
+REVOKE ALL ON ilker_intake_transition FROM PUBLIC;
+GRANT SELECT,UPDATE ON ilker_intake_transition TO ilker_service;
 COMMIT;
