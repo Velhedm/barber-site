@@ -19,8 +19,10 @@
     const select=$('#master');select.replaceChildren(new Option(t('Выберите мастера'),''),...state.masters.map(item=>new Option(masterName(item),item.id)));
     select.value=state.masterId;select.disabled=state.submitting||state.uncertain||!state.masters.length;
     setMessage($('#master-status'),state.masters.length?'':'Нет доступных мастеров для этих услуг');
+    const chooseMaster=$('#choose-master');chooseMaster.hidden=!state.management||!!state.masterId||!state.masters.length;setMessage(chooseMaster,'Выберите мастера');
     $('#summary-master').textContent=state.masterId?masterName(state.masters.find(m=>m.id===state.masterId)):'—';
   }
+  $('#choose-master').addEventListener('click',()=>{$('#master-field').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'center'});$('#master').focus({preventScroll:true});});
   async function refreshMasters(){
     if(!state.management)return;
     const sequence=++masterSequence;

@@ -11,6 +11,8 @@
   'Новая запись':{ru:'Новая запись',az:'Yeni rezervasiya',en:'New booking'},'Изменить запись':{ru:'Изменить запись',az:'Rezervasiyanı dəyiş',en:'Edit booking'},'Имя клиента':{ru:'Имя клиента',az:'Müştərinin adı',en:'Client name'},'Телефон':{ru:'Телефон',az:'Telefon',en:'Phone'},'Категория':{ru:'Категория',az:'Kateqoriya',en:'Category'},'Дата':{ru:'Дата',az:'Tarix',en:'Date'},'Мастер':{ru:'Мастер',az:'Usta',en:'Barber'},'Время':{ru:'Время',az:'Saat',en:'Time'},'Услуги':{ru:'Услуги',az:'Xidmətlər',en:'Services'},'Закрыть':{ru:'Закрыть',az:'Bağla',en:'Close'},'Создать запись':{ru:'Создать запись',az:'Rezervasiya yarat',en:'Create booking'},'Сохранить изменения':{ru:'Сохранить изменения',az:'Dəyişiklikləri saxla',en:'Save changes'},'Проверить свободное время':{ru:'Проверить свободное время',az:'Boş vaxtları yoxla',en:'Check available times'},'Выберите услуги, мастера и дату, затем проверьте свободное время.':{ru:'Выберите услуги, мастера и дату, затем проверьте свободное время.',az:'Xidmətləri, ustanı və tarixi seçin, sonra boş vaxtları yoxlayın.',en:'Choose services, a barber and a date, then check availability.'}
  };
  Object.assign(catalog,{
+  'Управление салоном':{ru:'Управление салоном',az:'Salonun idarə edilməsi',en:'Salon management'},
+  'Расписание':{ru:'Расписание',az:'İş cədvəli',en:'Schedule'},'Все записи':{ru:'Все записи',az:'Bütün rezervasiyalar',en:'All bookings'},
   'Рабочая неделя и шаг':{ru:'Рабочая неделя и шаг',az:'İş həftəsi və vaxt aralığı',en:'Working week and time step'},
   'Салон':{ru:'Салон',az:'Salon',en:'Salon'},'Безопасность':{ru:'Безопасность',az:'Təhlükəsizlik',en:'Security'},
   'Рабочее время: {start}–{end}':{ru:'Рабочее время: {start}–{end}',az:'İş saatları: {start}–{end}',en:'Working hours: {start}–{end}'},
