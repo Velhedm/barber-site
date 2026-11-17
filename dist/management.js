@@ -9,7 +9,7 @@ window.IlkerManagement = (() => {
   function text(tag,key,cls){return bind(node(tag,key,cls),key);}
   function masterText(el,m){return bind(el,()=>name(m));}
   function serviceText(el,s){return bind(el,(_,lang)=>lang==='az'?s.name:(s.translations?.[lang]||s.name));}
-  const actionLabels=new Set(['+ Добавить мастера','Убрать','+ Перерыв','Сохранить мастера','Архивировать мастера','Клиенты и доход мастера','История','Восстановить','Назад','Следующие 50','Сохранить','Добавить комнату','+ Добавить услугу','Сохранить услугу','Закрыть','Редактировать','Вернуть обычный график','Выходной для мастера','Закрыть время','Открыть время']);
+  const actionLabels=new Set(['+ Добавить мастера','Убрать','+ Перерыв','Сохранить мастера','Архивировать мастера','Клиенты и доход мастера','История','Восстановить','Назад','Следующие 50','Сохранить','Добавить комнату','+ Добавить услугу','Сохранить услугу','Закрыть','Редактировать','Вернуть обычный график','Выходной для мастера','Закрыть время','Открыть время','Рабочая неделя и шаг']);
   function node(tag, content, className) {const el = document.createElement(tag); if(content !== undefined) el.textContent = content; if(className) el.className = className; return el;}
   function button(label, fn, primary = false) {
     const el = node('button', label, primary ? 'button primary' : 'text-button');if(actionLabels.has(label))window.IlkerAdminI18n?.bind(el,label); el.type = 'button';
@@ -90,7 +90,8 @@ window.IlkerManagement = (() => {
   async function schedule(){
     if(!model)await refresh();const root=$('#management-schedule');if(!root)return;
     const date=$('#admin-date').value;if(!date)return;
-    if(!root.firstChild){const choose=select('Мастер',model.masters.filter(m=>!m.archived).map(m=>[m.id,name(m)]),selected||model.masters[0]?.id);choose.input.id='schedule-master';for(const option of choose.input.options){const m=model.masters.find(m=>m.id===option.value);if(m)masterText(option,m);}choose.input.addEventListener('change',()=>{selected=choose.input.value;schedule().catch(fail);});root.append(choose.label,node('div'));root.lastChild.id='master-day-controls';}
+    if(!root.firstChild){const choose=select('Мастер',model.masters.filter(m=>!m.archived).map(m=>[m.id,name(m)]),selected||model.masters[0]?.id);choose.input.id='schedule-master';for(const option of choose.input.options){const m=model.masters.find(m=>m.id===option.value);if(m)masterText(option,m);}choose.input.addEventListener('change',()=>{selected=choose.input.value;$('#appointments').replaceChildren();document.dispatchEvent(new CustomEvent('schedule-master-change'));});root.append(choose.label,node('div'));root.lastChild.id='master-day-controls';}
+    const choose=$('#schedule-master'),visible=model.masters.filter(m=>!m.archived),masterSignature=JSON.stringify(visible.map(m=>[m.id,m.name,m.position]));if(choose.dataset.masters!==masterSignature){const previous=choose.value;choose.replaceChildren(...visible.map(m=>masterText(new Option(name(m),m.id),m)));choose.value=visible.some(m=>m.id===previous)?previous:(visible[0]?.id||'');choose.dataset.masters=masterSignature;}
     const masterId=$('#schedule-master').value;if(!masterId)return;selected=masterId;
     const details=await api('/api/admin/master-day?'+new URLSearchParams({masterId,date}));
     if(date!==$('#admin-date').value||masterId!==$('#schedule-master').value)return;
@@ -98,7 +99,7 @@ window.IlkerManagement = (() => {
     target.append(button(closed?'Вернуть обычный график':'Выходной для мастера',async()=>{await api('/api/admin/master-exception',{masterId,date,day:closed?null:{closed:true}});saved();target.querySelector('details')?.removeAttribute('open');target.dataset.signature='';await schedule();}));
     const master=model.masters.find(m=>m.id===masterId),weekday=(new Date(date+'T00:00:00Z').getUTCDay()+6)%7;
     const day=details.exception||master?.schedule?.[weekday]||{closed:true};
-    const status=node('p',undefined,'schedule-day-status');bind(status,()=>day.closed?tr('Выходной'):tr('Рабочее время: {start}–{end}',{start:day.start,end:day.end}));target.prepend(status,note('Изменения графика не отменяют существующие записи.'));
+    const status=node('p',undefined,'schedule-day-status');bind(status,()=>day.closed?tr('Выходной'):tr('Рабочее время: {start}–{end}',{start:day.start,end:day.end}));target.prepend(status,note('Изменения графика не отменяют существующие записи.'));if(!$('#tab-masters').hidden)target.insertBefore(button('Рабочая неделя и шаг',()=>{$('#tab-masters').click();}),target.children[2]);
     const editor=node('details',undefined,'management-day');editor.append(text('summary','Изменить график на этот день'));
     const start=field('Начало','time',day.start||''),end=field('Конец','time',day.end||''),breaks=[],list=node('div',undefined,'management-breaks');
     start.input.required=end.input.required=true;
