@@ -88,6 +88,26 @@ matching check. Before release, create a fresh encrypted backup, independently s
 the backup and key, review roles/policies and rehearse full application access; never
 overwrite later real visits with the old snapshot.
 
+## Additional recovery rehearsal, 2026-11-17
+
+An encrypted production-derived archive made at approximately 04:42 UTC was uploaded
+to the owner's Google Drive without public sharing. It was downloaded back and matched
+the local archive byte-for-byte. The separately provided key was not uploaded to Drive.
+The dump was restored twice in a network-isolated PostgreSQL 18 container: a full
+archive restore and a schema/ACL plus data restore. Table counts and fingerprints
+matched between those two restored databases, all four application foreign-key orphan
+checks returned zero, and a restricted-role SELECT succeeded. The container and its
+anonymous data volume were removed after verification. This is not a comparison with a
+live snapshot at dump time, a full application recovery, or a backup of later bookings.
+Create a current backup immediately before any production migration.
+
+On 2026-11-17 a fresh Neon branch copied from production was used for the full
+management PostgreSQL test. Migrations preserved appointment and item counts and
+fingerprints, historical finance opening balances matched, and overlapping requests
+from separate application instances produced one successful booking. The branch is
+isolated and no production migration was performed. The PostgreSQL transition test
+also passed on that branch, including the shared-intake and master-activation race.
+
 
 ## Access migration (stage 3A)
 
